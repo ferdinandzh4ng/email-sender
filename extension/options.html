@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Gmail Campaign Sender</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 900px; }
+    nav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+    nav button { padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; }
+    nav button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    label { display: block; margin: 8px 0 4px; font-weight: 500; }
+    input[type="text"], input[type="datetime-local"], textarea, select { width: 100%; padding: 8px; margin-bottom: 8px; }
+    textarea { min-height: 120px; resize: vertical; }
+    button.primary { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; }
+    button.primary:hover { background: #1557b0; }
+    #preview { border: 1px solid #ddd; padding: 12px; margin-top: 8px; white-space: pre-wrap; background: #f9f9f9; min-height: 60px; }
+    .preview-box:empty::before { content: 'Upload CSV and save template to see preview'; color: #999; }
+    .error { color: #c5221f; font-size: 14px; }
+    .success { color: #137333; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f5f5f5; }
+    .csv-info { font-size: 13px; color: #666; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <nav>
+    <button data-panel="templates" class="active">Templates</button>
+    <button data-panel="campaign">Campaign</button>
+    <button data-panel="dashboard">Dashboard</button>
+  </nav>
+
+  <div id="panel-templates" class="panel active">
+    <h2>Email template</h2>
+    <p>Use placeholders like {{first_name}}, {{company}} — they must match your CSV column names. You can use HTML for embedded links: <code>&lt;a href="https://example.com"&gt;Click here&lt;/a&gt;</code>.</p>
+    <label>Subject</label>
+    <input type="text" id="templateSubject" placeholder="e.g. Hi {{first_name}}, applying to {{company}}">
+    <label>Body</label>
+    <textarea id="templateBody" placeholder="Dear {{first_name}},\n\n..."></textarea>
+    <button type="button" id="saveTemplate">Save template (local)</button>
+  </div>
+
+  <div id="panel-campaign" class="panel">
+    <h2>Schedule campaign</h2>
+    <p>For scheduled sends (when the browser is closed), link your Gmail account to the backend once:</p>
+    <button type="button" id="linkGmail">Link Gmail for scheduled sends</button>
+    <p>Upload a CSV with an <code>email</code> column and columns matching your template placeholders.</p>
+    <label>CSV file</label>
+    <input type="file" id="csvFile" accept=".csv">
+    <div id="csvInfo" class="csv-info"></div>
+    <label>Preview (first row merged into template)</label>
+    <div id="preview" class="preview-box"></div>
+    <label>Optional: attach one file for all emails (e.g. resume)</label>
+    <input type="file" id="attachmentFile">
+    <label>Send at (local time)</label>
+    <input type="datetime-local" id="sendAt">
+    <button type="button" id="scheduleCampaign" class="primary">Schedule campaign</button>
+    <div id="scheduleStatus"></div>
+  </div>
+
+  <div id="panel-dashboard" class="panel">
+    <h2>Sent campaigns</h2>
+    <button type="button" id="refreshDashboard">Refresh</button>
+    <div id="dashboardList"></div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

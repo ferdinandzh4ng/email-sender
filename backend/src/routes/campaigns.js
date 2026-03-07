@@ -1,0 +1,224 @@
+import { Router } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { getDb } from '../db.js';
+import { decrypt } from '../crypto.js';
+import { getAccessToken, sendEmail } from '../gmail.js';
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+
+const router = Router();
+const UPLOADS_DIR = process.env.UPLOADS_DIR || join(process.cwd(), 'data', 'uploads');
+const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25 MB Gmail limit
+
+/**
+ * POST /campaigns/send-test
+ * Send a single test email. Body: { accessToken, to, subject, body }
+ * Used by extension with token from chrome.identity.getAuthToken().
+ */
+router.post('/send-test', async (req, res) => {
+  try {
+    const { accessToken, to, subject, body } = req.body || {};
+    if (!to || !subject) {
+      return res.status(400).json({ error: 'to and subject required' });
+    }
+    if (!accessToken || typeof accessToken !== 'string') {
+      return res.status(401).json({ error: 'Missing OAuth token. In the extension, sign in with Google first (click the extension icon and try "Send test email" again). If it keeps failing, set the Chrome app OAuth client ID in manifest.json and reload the extension.' });
+    }
+    const messageId = await sendEmail(accessToken, {
+      to,
+      subject: subject || '(No subject)',
+      body: body || '',
+    });
+    res.json({ success: true, messageId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /campaigns/schedule
+ * Body: { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key?, userId? }
+ * userId: optional; if not provided we use a default or require header. For multi-user we'd use session; for MVP we use first user or single user.
+ */
+router.post('/schedule', async (req, res) => {
+  try {
+    const { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key, userId } = req.body;
+    if (!sendAt || !subject_template || !body_template || !Array.isArray(csv_rows) || csv_rows.length === 0) {
+      return res.status(400).json({ error: 'sendAt, subject_template, body_template, and non-empty csv_rows required' });
+    }
+    const first = csv_rows[0];
+    if (!first || typeof first !== 'object' || !('email' in first)) {
+      return res.status(400).json({ error: 'Each csv row must have an "email" field' });
+    }
+
+    const db = getDb();
+    const user = userId
+      ? db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
+      : db.prepare('SELECT id FROM users LIMIT 1').get();
+    if (!user) {
+      return res.status(400).json({ error: 'No linked Gmail account. Complete OAuth in the extension first.' });
+    }
+
+    const id = uuidv4();
+    db.prepare(
+      `INSERT INTO scheduled_jobs (id, user_id, send_at, timezone, subject_template, body_template, csv_rows, attachment_storage_key, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+    ).run(
+      id,
+      user.id,
+      sendAt,
+      timezone || 'UTC',
+      subject_template,
+      body_template,
+      JSON.stringify(csv_rows),
+      attachment_storage_key || null
+    );
+
+    res.status(201).json({ id, status: 'pending' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /campaigns/upload
+ * Body: { filename: string, content: string (base64) }. Returns { attachment_storage_key } for use in /schedule.
+ */
+router.post('/upload', async (req, res) => {
+  try {
+    const { filename: name, content: base64 } = req.body || {};
+    if (!base64) return res.status(400).json({ error: 'body.filename and body.content (base64) required' });
+    const content = Buffer.from(base64, 'base64');
+    if (content.length > MAX_ATTACHMENT_SIZE) {
+      return res.status(400).json({ error: 'File too large (max 25MB)' });
+    }
+    const filename = (name || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `${uuidv4()}_${filename}`;
+    await mkdir(UPLOADS_DIR, { recursive: true });
+    await writeFile(join(UPLOADS_DIR, key), content);
+    res.json({ attachment_storage_key: key });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /campaigns/sent
+ * Returns list of sent campaigns for dashboard.
+ */
+router.get('/sent', (req, res) => {
+  const db = getDb();
+  const jobs = db.prepare(
+    `SELECT id, send_at, timezone, subject_template, status, created_at
+     FROM scheduled_jobs WHERE status IN ('sent', 'failed') ORDER BY created_at DESC LIMIT 100`
+  ).all();
+
+  const withCounts = jobs.map((job) => {
+    const logs = db.prepare('SELECT recipient_email, gmail_message_id, sent_at, error FROM sent_log WHERE job_id = ?').all(job.id);
+    const sent = logs.filter((l) => !l.error).length;
+    const failed = logs.filter((l) => l.error).length;
+    return {
+      id: job.id,
+      send_at: job.send_at,
+      timezone: job.timezone,
+      subject_template: job.subject_template,
+      status: job.status,
+      created_at: job.created_at,
+      recipient_count: logs.length,
+      sent_count: sent,
+      failed_count: failed,
+      recipients: logs,
+    };
+  });
+
+  res.json({ campaigns: withCounts });
+});
+
+export default router;
+
+export async function processDueJobs() {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const due = db.prepare(
+    "SELECT * FROM scheduled_jobs WHERE status = 'pending' AND send_at <= ?"
+  ).all(now);
+
+  for (const job of due) {
+    const user = db.prepare('SELECT encrypted_refresh_token FROM users WHERE id = ?').get(job.user_id);
+    if (!user) {
+      db.prepare("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?").run(job.id);
+      continue;
+    }
+
+    let accessToken;
+    try {
+      const refreshToken = user.encrypted_refresh_token ? decrypt(user.encrypted_refresh_token) : null;
+      if (!refreshToken) throw new Error('No stored refresh token. Complete "Link Gmail for scheduled sends" in the extension.');
+      accessToken = await getAccessToken(refreshToken);
+      if (!accessToken) throw new Error('Failed to get access token from refresh token.');
+    } catch (err) {
+      db.prepare("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?").run(job.id);
+      for (const row of JSON.parse(job.csv_rows)) {
+        const email = row.email || row.Email;
+        if (email) {
+          db.prepare(
+            'INSERT INTO sent_log (job_id, recipient_email, error) VALUES (?, ?, ?)'
+          ).run(job.id, email, err.message);
+        }
+      }
+      continue;
+    }
+
+    const rows = JSON.parse(job.csv_rows);
+    let attachment = null;
+    if (job.attachment_storage_key) {
+      try {
+        const path = join(UPLOADS_DIR, job.attachment_storage_key);
+        const content = await readFile(path);
+        const name = job.attachment_storage_key.replace(/^[^_]+_/, '');
+        attachment = { filename: name, content, mimeType: 'application/octet-stream' };
+      } catch (e) {
+        // log and continue without attachment
+      }
+    }
+
+    for (const row of rows) {
+      const to = row.email || row.Email;
+      if (!to) continue;
+      const subject = replacePlaceholders(job.subject_template, row);
+      const body = replacePlaceholders(job.body_template, row, { htmlEscape: true });
+      try {
+        const messageId = await sendEmail(accessToken, { to, subject, body, attachment });
+        db.prepare(
+          'INSERT INTO sent_log (job_id, recipient_email, gmail_message_id, sent_at) VALUES (?, ?, ?, datetime("now"))'
+        ).run(job.id, to, messageId);
+      } catch (err) {
+        db.prepare(
+          'INSERT INTO sent_log (job_id, recipient_email, error) VALUES (?, ?, ?)'
+        ).run(job.id, to, err.message);
+      }
+    }
+
+    db.prepare("UPDATE scheduled_jobs SET status = 'sent' WHERE id = ?").run(job.id);
+  }
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function replacePlaceholders(template, row, options = {}) {
+  if (typeof template !== 'string') return '';
+  const htmlEscape = options.htmlEscape === true;
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const val = row[key];
+    const raw = val != null ? String(val) : '';
+    return htmlEscape ? escapeHtml(raw) : raw;
+  });
+}

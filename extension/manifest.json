@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Gmail Campaign Sender",
+  "version": "1.0.0",
+  "description": "Send templated emails from CSV with scheduling and tracking",
+  "permissions": [
+    "identity",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/*",
+    "http://localhost:3000/*",
+    "https://*.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "63370906647-uglk5f5dqm0fapmlvp27asfnjitu22f4.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/gmail.compose"
+    ]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Gmail Campaign Sender"
+  },
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    { "resources": ["success.html", "success.js"], "matches": ["<all_urls>"] }
+  ]
+}
