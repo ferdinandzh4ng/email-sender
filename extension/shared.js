@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND = 'http://localhost:3000';
+const DEFAULT_BACKEND = 'https://email-sender-dztw.onrender.com';
 
 async function getBackend() {
   const { backend } = await chrome.storage.local.get('backend');

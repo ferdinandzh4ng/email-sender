@@ -12,6 +12,7 @@
     "https://mail.google.com/",
     "https://www.googleapis.com/*",
     "http://localhost:3000/*",
+    "https://email-sender-dztw.onrender.com/*",
     "https://*.googleapis.com/*"
   ],
   "oauth2": {

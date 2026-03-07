@@ -1,4 +1,4 @@
-const BACKEND = 'http://localhost:3000';
+const BACKEND = 'https://email-sender-dztw.onrender.com';
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ backend: BACKEND });
