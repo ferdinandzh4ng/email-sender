@@ -1,5 +1,12 @@
 import pg from 'pg';
+import dns from 'dns';
+
 const { Pool } = pg;
+
+// Prefer IPv4 so connections work on Render (which often has no IPv6).
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 let pool;
 
@@ -42,10 +49,22 @@ export async function initDb() {
     throw new Error('DATABASE_URL is required (Supabase Postgres connection string). See README.');
   }
   const trimmed = connectionString.trim();
-  if (trimmed.length < 20 || trimmed.startsWith('$') || /@\$[\s,]|@\$\s*$/.test(trimmed)) {
+  if (trimmed.length < 20 || trimmed.startsWith('$')) {
     throw new Error(
       'DATABASE_URL looks invalid (e.g. placeholder or empty host). ' +
-      'Set it to the full Postgres URL from Supabase (Project Settings → Database), e.g. postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres'
+      'Set it to the full Postgres URL from Supabase (Project Settings → Database). ' +
+      'Encode special chars in password: # → %23, @ → %40, $ → %24, / → %2F, ? → %3F'
+    );
+  }
+  try {
+    const u = new URL(trimmed.replace(/^postgresql:\/\//, 'https://'));
+    if (!u.hostname || u.hostname === '$' || u.hostname.length < 2) {
+      throw new Error('DATABASE_URL host is missing or invalid. Encode special characters in the password (e.g. @ → %40, $ → %24).');
+    }
+  } catch (e) {
+    if (e.message && e.message.includes('DATABASE_URL')) throw e;
+    throw new Error(
+      'DATABASE_URL could not be parsed. Encode special chars in password: # → %23, @ → %40, $ → %24, / → %2F, ? → %3F'
     );
   }
   pool = new Pool({
