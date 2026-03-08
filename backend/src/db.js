@@ -3,20 +3,28 @@ import dns from 'dns';
 
 const { Pool } = pg;
 
-// Force ALL DNS lookups to IPv4. Render's network cannot reach IPv6 addresses,
-// and Supabase hostnames resolve to both IPv4 and IPv6. Without this, pg may
-// pick the IPv6 address and fail with ENETUNREACH.
+// Force DNS lookups to try IPv4 first. Render cannot reach IPv6 addresses,
+// and Supabase hostnames resolve to both. Without this, pg may pick IPv6
+// and fail with ENETUNREACH.
 const _origLookup = dns.lookup;
 dns.lookup = function (hostname, options, cb) {
   if (typeof options === 'function') {
     cb = options;
-    options = { family: 4 };
+    options = {};
   } else if (typeof options === 'number') {
-    options = { family: 4 };
+    options = { family: options };
   } else {
-    options = { ...options, family: 4 };
+    options = { ...options };
   }
-  return _origLookup.call(this, hostname, options, cb);
+  const origFamily = options.family;
+  options.family = 4;
+  _origLookup.call(this, hostname, options, (err, address, family) => {
+    if (err && (!origFamily || origFamily === 0)) {
+      delete options.family;
+      return _origLookup.call(this, hostname, options, cb);
+    }
+    cb(err, address, family);
+  });
 };
 
 let pool;
