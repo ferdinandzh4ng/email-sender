@@ -59,11 +59,21 @@ document.querySelectorAll('.side-nav [data-panel]').forEach((btn) => {
     if (panel === 'dashboard') loadDashboard();
     if (panel === 'templates') loadTemplatesList();
     if (panel === 'campaign') {
+      resetCampaignPanel();
       loadLinkedUser();
       loadCampaignTemplatePicker();
     }
   });
 });
+
+function resetCampaignPanel() {
+  const statusEl = document.getElementById('scheduleStatus');
+  if (statusEl) {
+    statusEl.textContent = '';
+    statusEl.className = '';
+  }
+  setSendButtonsLoading(false);
+}
 
 let templatesList = [];
 function renderTemplatesList(container, list, onSelect) {
