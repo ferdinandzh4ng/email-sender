@@ -2,7 +2,22 @@ import pg from 'pg';
 import dns from 'dns';
 
 const { Pool } = pg;
-const dnsPromises = dns.promises;
+
+// Force ALL DNS lookups to IPv4. Render's network cannot reach IPv6 addresses,
+// and Supabase hostnames resolve to both IPv4 and IPv6. Without this, pg may
+// pick the IPv6 address and fail with ENETUNREACH.
+const _origLookup = dns.lookup;
+dns.lookup = function (hostname, options, cb) {
+  if (typeof options === 'function') {
+    cb = options;
+    options = { family: 4 };
+  } else if (typeof options === 'number') {
+    options = { family: 4 };
+  } else {
+    options = { ...options, family: 4 };
+  }
+  return _origLookup.call(this, hostname, options, cb);
+};
 
 let pool;
 
@@ -52,13 +67,11 @@ export async function initDb() {
       'Encode special chars in password: # → %23, @ → %40, $ → %24, / → %2F, ? → %3F'
     );
   }
-  let parsed;
   try {
     const u = new URL(trimmed.replace(/^postgresql:\/\//, 'https://'));
     if (!u.hostname || u.hostname === '$' || u.hostname.length < 2) {
       throw new Error('DATABASE_URL host is missing or invalid. Encode special characters in the password (e.g. @ → %40, $ → %24).');
     }
-    parsed = u;
   } catch (e) {
     if (e.message && e.message.includes('DATABASE_URL')) throw e;
     throw new Error(
@@ -66,31 +79,9 @@ export async function initDb() {
     );
   }
 
-  const hostname = parsed.hostname;
-  const useSsl = trimmed.includes('supabase');
-  let poolConfig;
-
-  try {
-    const ipv4 = await dnsPromises.resolve4(hostname);
-    if (ipv4 && ipv4.length > 0) {
-      poolConfig = {
-        host: ipv4[0],
-        port: parseInt(parsed.port || '5432', 10),
-        user: decodeURIComponent(parsed.username || 'postgres'),
-        password: decodeURIComponent(parsed.password || ''),
-        database: (parsed.pathname || '/postgres').slice(1) || 'postgres',
-        ssl: useSsl ? { rejectUnauthorized: false, servername: hostname } : undefined,
-      };
-    }
-  } catch (_) {}
-
-  if (!poolConfig) {
-    poolConfig = {
-      connectionString: trimmed,
-      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
-    };
-  }
-
-  pool = new Pool(poolConfig);
+  pool = new Pool({
+    connectionString: trimmed,
+    ssl: trimmed.includes('supabase') ? { rejectUnauthorized: false } : undefined,
+  });
   return db;
 }
