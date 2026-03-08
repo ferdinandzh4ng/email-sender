@@ -38,12 +38,19 @@ export function getDb() {
 export async function initDb() {
   if (pool) return db;
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
+  if (!connectionString || typeof connectionString !== 'string') {
     throw new Error('DATABASE_URL is required (Supabase Postgres connection string). See README.');
   }
+  const trimmed = connectionString.trim();
+  if (trimmed.length < 20 || trimmed.startsWith('$') || /@\$[\s,]|@\$\s*$/.test(trimmed)) {
+    throw new Error(
+      'DATABASE_URL looks invalid (e.g. placeholder or empty host). ' +
+      'Set it to the full Postgres URL from Supabase (Project Settings → Database), e.g. postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres'
+    );
+  }
   pool = new Pool({
-    connectionString,
-    ssl: connectionString.includes('supabase') ? { rejectUnauthorized: false } : undefined,
+    connectionString: trimmed,
+    ssl: trimmed.includes('supabase') ? { rejectUnauthorized: false } : undefined,
   });
   return db;
 }
