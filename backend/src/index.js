@@ -16,13 +16,24 @@ async function start() {
   const app = express();
 
   const allowed = process.env.ALLOWED_ORIGINS || process.env.EXTENSION_ORIGIN || process.env.WEB_APP_ORIGIN || '*';
-  const origins = typeof allowed === 'string' && allowed.includes(',')
+  const raw = typeof allowed === 'string' && allowed.includes(',')
     ? allowed.split(',').map((o) => o.trim()).filter(Boolean)
     : [allowed].flat();
+  const normalize = (o) => (o || '').trim().replace(/\/+$/, '');
+  const origins = raw.map(normalize).filter(Boolean);
   app.use(cors({
     origin: origins.length > 1
-      ? (origin, cb) => cb(null, origin && origins.includes(origin) ? origin : origins[0])
-      : origins[0],
+      ? (origin, cb) => {
+          const norm = normalize(origin);
+          const ok = norm && origins.includes(norm);
+          cb(null, ok ? origin : origins[0]);
+        }
+      : origins[0] === '*'
+        ? '*'
+        : (origin, cb) => {
+            const norm = normalize(origin);
+            cb(null, norm && origins.includes(norm) ? origin : false);
+          },
   }));
   app.use(express.json({ limit: '30mb' }));
   app.use(express.static(join(__dirname, '..')));

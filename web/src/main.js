@@ -317,6 +317,19 @@ document.getElementById('openCalendar').addEventListener('click', () => {
   if (typeof input.showPicker === 'function') input.showPicker();
 });
 
+function setSendButtonsLoading(loading) {
+  const sendBtn = document.getElementById('sendNowBtn');
+  const scheduleBtn = document.getElementById('scheduleCampaign');
+  if (sendBtn) {
+    sendBtn.disabled = loading;
+    sendBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
+  }
+  if (scheduleBtn) {
+    scheduleBtn.disabled = loading;
+    scheduleBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
+  }
+}
+
 document.getElementById('sendNowBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('scheduleStatus');
   statusEl.textContent = '';
@@ -329,13 +342,18 @@ document.getElementById('sendNowBtn').addEventListener('click', async () => {
   try { attachmentStorageKey = await uploadAttachmentIfAny(); } catch (err) { statusEl.textContent = 'Upload failed: ' + err.message; statusEl.className = 'error'; return; }
   const payload = getCampaignPayload();
   if (attachmentStorageKey) payload.attachment_storage_key = attachmentStorageKey;
+  setSendButtonsLoading(true);
+  statusEl.textContent = 'Sending…';
+  statusEl.className = '';
   try {
     await api.fetchBackend('/campaigns/send-now', { method: 'POST', body: JSON.stringify(payload) });
-    statusEl.textContent = 'Sent. Check Dashboard for details.';
+    statusEl.textContent = 'Sent! Redirecting to dashboard…';
     statusEl.className = 'success';
+    goToDashboard();
   } catch (err) {
     statusEl.textContent = err.message;
     statusEl.className = 'error';
+    setSendButtonsLoading(false);
   }
 });
 
@@ -354,14 +372,18 @@ document.getElementById('scheduleCampaign').addEventListener('click', async () =
   const payload = getCampaignPayload();
   payload.sendAt = new Date(sendAtInput).toISOString();
   if (attachmentStorageKey) payload.attachment_storage_key = attachmentStorageKey;
+  setSendButtonsLoading(true);
+  statusEl.textContent = 'Scheduling…';
+  statusEl.className = '';
   try {
     await api.fetchBackend('/campaigns/schedule', { method: 'POST', body: JSON.stringify(payload) });
-    statusEl.textContent = 'Scheduled. Redirecting to dashboard…';
+    statusEl.textContent = 'Scheduled! Redirecting to dashboard…';
     statusEl.className = 'success';
     goToDashboard();
   } catch (err) {
     statusEl.textContent = err.message;
     statusEl.className = 'error';
+    setSendButtonsLoading(false);
   }
 });
 
