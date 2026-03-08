@@ -5,6 +5,7 @@ import { decrypt } from '../crypto.js';
 import { getAccessToken, sendEmail } from '../gmail.js';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import * as storage from '../storage.js';
 
 const router = Router();
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(process.cwd(), 'data', 'uploads');
@@ -53,17 +54,16 @@ router.post('/schedule', async (req, res) => {
 
     const db = getDb();
     const user = userId
-      ? db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
-      : db.prepare('SELECT id FROM users LIMIT 1').get();
+      ? await db.get('SELECT id FROM users WHERE id = ?', userId)
+      : await db.get('SELECT id FROM users LIMIT 1');
     if (!user) {
       return res.status(400).json({ error: 'No linked Gmail account. Complete OAuth in the extension first.' });
     }
 
     const id = uuidv4();
-    db.prepare(
+    await db.run(
       `INSERT INTO scheduled_jobs (id, user_id, send_at, timezone, subject_template, body_template, csv_rows, attachment_storage_key, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
-    ).run(
+       VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'pending')`,
       id,
       user.id,
       sendAt,
@@ -83,6 +83,7 @@ router.post('/schedule', async (req, res) => {
 /**
  * POST /campaigns/upload
  * Body: { filename: string, content: string (base64) }. Returns { attachment_storage_key } for use in /schedule.
+ * Uses Supabase Storage when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set; otherwise local UPLOADS_DIR.
  */
 router.post('/upload', async (req, res) => {
   try {
@@ -94,9 +95,88 @@ router.post('/upload', async (req, res) => {
     }
     const filename = (name || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `${uuidv4()}_${filename}`;
-    await mkdir(UPLOADS_DIR, { recursive: true });
-    await writeFile(join(UPLOADS_DIR, key), content);
+    if (storage.hasStorage()) {
+      await storage.uploadAttachment(key, content);
+    } else {
+      await mkdir(UPLOADS_DIR, { recursive: true });
+      await writeFile(join(UPLOADS_DIR, key), content);
+    }
     res.json({ attachment_storage_key: key });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /campaigns/scheduled
+ * Returns list of pending (scheduled, not yet sent) campaigns.
+ */
+router.get('/scheduled', async (req, res) => {
+  try {
+    const db = getDb();
+    const jobs = await db.all(
+      `SELECT id, send_at, timezone, subject_template, status, created_at, csv_rows
+       FROM scheduled_jobs WHERE status = 'pending' ORDER BY send_at ASC LIMIT 100`
+    );
+    const withCounts = jobs.map((job) => {
+      const rows = typeof job.csv_rows === 'string' ? JSON.parse(job.csv_rows) : (job.csv_rows || []);
+      return {
+        id: job.id,
+        send_at: job.send_at,
+        timezone: job.timezone,
+        subject_template: job.subject_template,
+        status: job.status,
+        created_at: job.created_at,
+        recipient_count: rows.length,
+      };
+    });
+    res.json({ campaigns: withCounts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /campaigns/send-now
+ * Same body as /schedule but sends immediately (creates job with send_at = now, then runs processDueJobs).
+ */
+router.post('/send-now', async (req, res) => {
+  try {
+    const { timezone, subject_template, body_template, csv_rows, attachment_storage_key, userId } = req.body || {};
+    if (!subject_template || !body_template || !Array.isArray(csv_rows) || csv_rows.length === 0) {
+      return res.status(400).json({ error: 'subject_template, body_template, and non-empty csv_rows required' });
+    }
+    const first = csv_rows[0];
+    if (!first || typeof first !== 'object' || !('email' in first)) {
+      return res.status(400).json({ error: 'Each csv row must have an "email" field' });
+    }
+
+    const db = getDb();
+    const user = userId
+      ? await db.get('SELECT id FROM users WHERE id = ?', userId)
+      : await db.get('SELECT id FROM users LIMIT 1');
+    if (!user) {
+      return res.status(400).json({ error: 'No linked Gmail account. Complete OAuth in the extension first.' });
+    }
+
+    const sendAt = new Date().toISOString();
+    const id = uuidv4();
+    await db.run(
+      `INSERT INTO scheduled_jobs (id, user_id, send_at, timezone, subject_template, body_template, csv_rows, attachment_storage_key, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'pending')`,
+      id,
+      user.id,
+      sendAt,
+      timezone || 'UTC',
+      subject_template,
+      body_template,
+      JSON.stringify(csv_rows),
+      attachment_storage_key || null
+    );
+
+    await processDueJobs();
+
+    res.status(201).json({ id, status: 'sent' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -106,32 +186,38 @@ router.post('/upload', async (req, res) => {
  * GET /campaigns/sent
  * Returns list of sent campaigns for dashboard.
  */
-router.get('/sent', (req, res) => {
-  const db = getDb();
-  const jobs = db.prepare(
-    `SELECT id, send_at, timezone, subject_template, status, created_at
-     FROM scheduled_jobs WHERE status IN ('sent', 'failed') ORDER BY created_at DESC LIMIT 100`
-  ).all();
+router.get('/sent', async (req, res) => {
+  try {
+    const db = getDb();
+    const jobs = await db.all(
+      `SELECT id, send_at, timezone, subject_template, status, created_at
+       FROM scheduled_jobs WHERE status IN ('sent', 'failed') ORDER BY created_at DESC LIMIT 100`
+    );
 
-  const withCounts = jobs.map((job) => {
-    const logs = db.prepare('SELECT recipient_email, gmail_message_id, sent_at, error FROM sent_log WHERE job_id = ?').all(job.id);
-    const sent = logs.filter((l) => !l.error).length;
-    const failed = logs.filter((l) => l.error).length;
-    return {
-      id: job.id,
-      send_at: job.send_at,
-      timezone: job.timezone,
-      subject_template: job.subject_template,
-      status: job.status,
-      created_at: job.created_at,
-      recipient_count: logs.length,
-      sent_count: sent,
-      failed_count: failed,
-      recipients: logs,
-    };
-  });
+    const withCounts = await Promise.all(
+      jobs.map(async (job) => {
+        const logs = await db.all('SELECT recipient_email, gmail_message_id, sent_at, error FROM sent_log WHERE job_id = ?', job.id);
+        const sent = logs.filter((l) => !l.error).length;
+        const failed = logs.filter((l) => l.error).length;
+        return {
+          id: job.id,
+          send_at: job.send_at,
+          timezone: job.timezone,
+          subject_template: job.subject_template,
+          status: job.status,
+          created_at: job.created_at,
+          recipient_count: logs.length,
+          sent_count: sent,
+          failed_count: failed,
+          recipients: logs,
+        };
+      })
+    );
 
-  res.json({ campaigns: withCounts });
+    res.json({ campaigns: withCounts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;
@@ -139,14 +225,15 @@ export default router;
 export async function processDueJobs() {
   const db = getDb();
   const now = new Date().toISOString();
-  const due = db.prepare(
-    "SELECT * FROM scheduled_jobs WHERE status = 'pending' AND send_at <= ?"
-  ).all(now);
+  const due = await db.all(
+    "SELECT * FROM scheduled_jobs WHERE status = 'pending' AND send_at <= ?",
+    now
+  );
 
   for (const job of due) {
-    const user = db.prepare('SELECT encrypted_refresh_token FROM users WHERE id = ?').get(job.user_id);
+    const user = await db.get('SELECT encrypted_refresh_token FROM users WHERE id = ?', job.user_id);
     if (!user) {
-      db.prepare("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?").run(job.id);
+      await db.run("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?", job.id);
       continue;
     }
 
@@ -157,24 +244,29 @@ export async function processDueJobs() {
       accessToken = await getAccessToken(refreshToken);
       if (!accessToken) throw new Error('Failed to get access token from refresh token.');
     } catch (err) {
-      db.prepare("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?").run(job.id);
-      for (const row of JSON.parse(job.csv_rows)) {
+      await db.run("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?", job.id);
+      const rows = typeof job.csv_rows === 'string' ? JSON.parse(job.csv_rows) : job.csv_rows;
+      for (const row of rows) {
         const email = row.email || row.Email;
         if (email) {
-          db.prepare(
-            'INSERT INTO sent_log (job_id, recipient_email, error) VALUES (?, ?, ?)'
-          ).run(job.id, email, err.message);
+          await db.run(
+            'INSERT INTO sent_log (job_id, recipient_email, error) VALUES (?, ?, ?)',
+            job.id,
+            email,
+            err.message
+          );
         }
       }
       continue;
     }
 
-    const rows = JSON.parse(job.csv_rows);
+    const rows = typeof job.csv_rows === 'string' ? JSON.parse(job.csv_rows) : job.csv_rows;
     let attachment = null;
     if (job.attachment_storage_key) {
       try {
-        const path = join(UPLOADS_DIR, job.attachment_storage_key);
-        const content = await readFile(path);
+        const content = storage.hasStorage()
+          ? await storage.downloadAttachment(job.attachment_storage_key)
+          : await readFile(join(UPLOADS_DIR, job.attachment_storage_key));
         const name = job.attachment_storage_key.replace(/^[^_]+_/, '');
         attachment = { filename: name, content, mimeType: 'application/octet-stream' };
       } catch (e) {
@@ -189,17 +281,23 @@ export async function processDueJobs() {
       const body = replacePlaceholders(job.body_template, row, { htmlEscape: true });
       try {
         const messageId = await sendEmail(accessToken, { to, subject, body, attachment });
-        db.prepare(
-          'INSERT INTO sent_log (job_id, recipient_email, gmail_message_id, sent_at) VALUES (?, ?, ?, datetime("now"))'
-        ).run(job.id, to, messageId);
+        await db.run(
+          'INSERT INTO sent_log (job_id, recipient_email, gmail_message_id, sent_at) VALUES (?, ?, ?, NOW())',
+          job.id,
+          to,
+          messageId
+        );
       } catch (err) {
-        db.prepare(
-          'INSERT INTO sent_log (job_id, recipient_email, error) VALUES (?, ?, ?)'
-        ).run(job.id, to, err.message);
+        await db.run(
+          'INSERT INTO sent_log (job_id, recipient_email, error) VALUES (?, ?, ?)',
+          job.id,
+          to,
+          err.message
+        );
       }
     }
 
-    db.prepare("UPDATE scheduled_jobs SET status = 'sent' WHERE id = ?").run(job.id);
+    await db.run("UPDATE scheduled_jobs SET status = 'sent' WHERE id = ?", job.id);
   }
 }
 

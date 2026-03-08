@@ -3,70 +3,325 @@
 <head>
   <meta charset="utf-8">
   <title>Gmail Campaign Sender</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #0f1216;
+      --bg-card: #1a1e26;
+      --bg-sidebar: #151922;
+      --border: #2a303c;
+      --text: #e6e9ef;
+      --text-muted: #8b92a3;
+      --accent: #22c55e;
+      --accent-hover: #16a34a;
+      --accent-dim: rgba(34, 197, 94, 0.15);
+      --error: #ef4444;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 900px; }
-    nav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
-    nav button { padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; }
-    nav button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      width: 240px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      padding: 20px 0;
+      flex-shrink: 0;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--bg);
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .logo-text { font-weight: 700; font-size: 1.1rem; }
+    nav.side-nav { padding: 0 12px; }
+    nav.side-nav button {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 14px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+      margin-bottom: 2px;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav.side-nav button:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+    nav.side-nav button.active { background: var(--accent-dim); color: var(--accent); }
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .header {
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: var(--bg);
+    }
+    .header-title { font-weight: 600; font-size: 1rem; }
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .header-user .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+    .header-user .email { color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-user .linked-badge { color: var(--accent); font-size: 12px; }
+    .header-user .not-linked { color: var(--text-muted); }
+    .content { padding: 24px; overflow: auto; flex: 1; }
     .panel { display: none; }
     .panel.active { display: block; }
-    label { display: block; margin: 8px 0 4px; font-weight: 500; }
-    input[type="text"], input[type="datetime-local"], textarea, select { width: 100%; padding: 8px; margin-bottom: 8px; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h3 { margin: 0 0 16px; font-size: 1rem; font-weight: 600; }
+    label { display: block; margin: 8px 0 4px; font-weight: 500; font-size: 13px; color: var(--text-muted); }
+    input[type="text"], input[type="datetime-local"], textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font: inherit;
+    }
+    input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0.8; }
     textarea { min-height: 120px; resize: vertical; }
-    button.primary { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; }
-    button.primary:hover { background: #1557b0; }
-    #preview { border: 1px solid #ddd; padding: 12px; margin-top: 8px; white-space: pre-wrap; background: #f9f9f9; min-height: 60px; }
-    .preview-box:empty::before { content: 'Upload CSV and save template to see preview'; color: #999; }
-    .error { color: #c5221f; font-size: 14px; }
-    .success { color: #137333; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f5f5f5; }
-    .csv-info { font-size: 13px; color: #666; margin: 4px 0; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: var(--bg); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.06); }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    #preview {
+      border: 1px solid var(--border);
+      padding: 12px;
+      margin-top: 8px;
+      white-space: pre-wrap;
+      background: var(--bg);
+      min-height: 60px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+    .preview-box:empty::before { content: 'Upload CSV and pick a template to see preview'; color: var(--text-muted); }
+    .error { color: var(--error); font-size: 14px; }
+    .success { color: var(--accent); }
+    .csv-info { font-size: 13px; color: var(--text-muted); margin: 4px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; }
+    th { background: var(--bg-sidebar); color: var(--text-muted); font-weight: 500; }
+    tr:hover { background: rgba(255,255,255,0.02); }
+
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .stat-card .num { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    .template-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .template-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .template-card:hover { border-color: var(--accent); }
+    .template-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+    .template-card .name { font-weight: 600; margin-bottom: 4px; }
+    .template-card .subject { font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .template-card .updated { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+    .schedule-list { list-style: none; padding: 0; margin: 0; }
+    .schedule-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .schedule-list li:last-child { border-bottom: none; }
+    .schedule-list .subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 12px; }
+    .schedule-list .meta { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+    .schedule-list .actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+    .action-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+    .status-msg { font-size: 14px; margin-top: 8px; }
   </style>
 </head>
 <body>
-  <nav>
-    <button data-panel="templates" class="active">Templates</button>
-    <button data-panel="campaign">Campaign</button>
-    <button data-panel="dashboard">Dashboard</button>
-  </nav>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">G</div>
+        <span class="logo-text">Campaign Sender</span>
+      </div>
+      <nav class="side-nav">
+        <button type="button" data-panel="dashboard" class="active">Dashboard</button>
+        <button type="button" data-panel="templates">Templates</button>
+        <button type="button" data-panel="campaign">New campaign</button>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="header">
+        <span class="header-title" id="headerTitle">Dashboard</span>
+        <div class="header-user" id="headerUser">
+          <span class="not-linked">Checking…</span>
+        </div>
+      </header>
+      <div class="content">
+        <div id="panel-dashboard" class="panel active">
+          <div class="stat-cards" id="statCards"></div>
+          <div class="card">
+            <h3>Emails to be sent</h3>
+            <div id="scheduledList"></div>
+          </div>
+          <div class="card">
+            <h3>Saved templates</h3>
+            <div id="dashboardTemplates" class="template-cards"></div>
+            <p style="margin:12px 0 0; font-size:13px; color: var(--text-muted);">Pick a template below to start a campaign.</p>
+          </div>
+          <div class="card">
+            <h3>Sent campaigns</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="refreshDashboard">Refresh</button>
+            <div id="dashboardList"></div>
+          </div>
+        </div>
 
-  <div id="panel-templates" class="panel active">
-    <h2>Email template</h2>
-    <p>Use placeholders like {{first_name}}, {{company}} — they must match your CSV column names. You can use HTML for embedded links: <code>&lt;a href="https://example.com"&gt;Click here&lt;/a&gt;</code>.</p>
-    <label>Subject</label>
-    <input type="text" id="templateSubject" placeholder="e.g. Hi {{first_name}}, applying to {{company}}">
-    <label>Body</label>
-    <textarea id="templateBody" placeholder="Dear {{first_name}},\n\n..."></textarea>
-    <button type="button" id="saveTemplate">Save template (local)</button>
+        <div id="panel-templates" class="panel">
+          <div class="card">
+            <h3>Email template</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 12px;">Use placeholders like {{first_name}}, {{company}} — they must match your CSV columns.</p>
+            <label>Name</label>
+            <input type="text" id="templateName" placeholder="e.g. Job application">
+            <label>Subject</label>
+            <input type="text" id="templateSubject" placeholder="e.g. Hi {{first_name}}, applying to {{company}}">
+            <label>Body</label>
+            <textarea id="templateBody" placeholder="Dear {{first_name}},&#10;&#10;..."></textarea>
+            <div class="action-row">
+              <button type="button" class="btn btn-primary" id="saveTemplate">Save template</button>
+              <span id="saveTemplateStatus" class="status-msg"></span>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Your templates</h3>
+            <div id="templatesList" class="template-cards"></div>
+          </div>
+        </div>
+
+        <div id="panel-campaign" class="panel">
+          <div class="card">
+            <h3>Start a campaign</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 12px;">Link Gmail once for scheduled and send-now. Then pick a template, upload CSV, and send or schedule.</p>
+            <button type="button" class="btn btn-secondary" id="linkGmail">Link Gmail for scheduled sends</button>
+            <div id="linkGmailStatus" style="margin-top:8px; font-size:13px; color: var(--text-muted);"></div>
+          </div>
+          <div class="card">
+            <h3>Pick a template</h3>
+            <div id="campaignTemplatePicker" class="template-cards"></div>
+            <label style="margin-top:12px;">Subject (editable)</label>
+            <input type="text" id="campaignSubject" placeholder="Subject line">
+            <label>Body (editable)</label>
+            <textarea id="campaignBody" placeholder="Body"></textarea>
+          </div>
+          <div class="card">
+            <h3>Recipients & attachment</h3>
+            <label>CSV file (must have <code>email</code> column)</label>
+            <input type="file" id="csvFile" accept=".csv">
+            <div id="csvInfo" class="csv-info"></div>
+            <label>Preview (first row)</label>
+            <div id="preview" class="preview-box"></div>
+            <label>Optional: one attachment for all (e.g. resume)</label>
+            <input type="file" id="attachmentFile">
+          </div>
+          <div class="card">
+            <h3>Send</h3>
+            <label>Send at (for schedule only)</label>
+            <input type="datetime-local" id="sendAt">
+            <div class="action-row">
+              <button type="button" class="btn btn-primary" id="sendNowBtn">Send now</button>
+              <button type="button" class="btn btn-secondary" id="scheduleCampaign">Schedule campaign</button>
+              <span id="scheduleStatus" class="status-msg"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   </div>
-
-  <div id="panel-campaign" class="panel">
-    <h2>Schedule campaign</h2>
-    <p>For scheduled sends (when the browser is closed), link your Gmail account to the backend once:</p>
-    <button type="button" id="linkGmail">Link Gmail for scheduled sends</button>
-    <p>Upload a CSV with an <code>email</code> column and columns matching your template placeholders.</p>
-    <label>CSV file</label>
-    <input type="file" id="csvFile" accept=".csv">
-    <div id="csvInfo" class="csv-info"></div>
-    <label>Preview (first row merged into template)</label>
-    <div id="preview" class="preview-box"></div>
-    <label>Optional: attach one file for all emails (e.g. resume)</label>
-    <input type="file" id="attachmentFile">
-    <label>Send at (local time)</label>
-    <input type="datetime-local" id="sendAt">
-    <button type="button" id="scheduleCampaign" class="primary">Schedule campaign</button>
-    <div id="scheduleStatus"></div>
-  </div>
-
-  <div id="panel-dashboard" class="panel">
-    <h2>Sent campaigns</h2>
-    <button type="button" id="refreshDashboard">Refresh</button>
-    <div id="dashboardList"></div>
-  </div>
-
   <script src="shared.js"></script>
   <script src="options.js"></script>
 </body>

@@ -7,18 +7,42 @@ import { encrypt } from '../crypto.js';
 const router = Router();
 
 /**
+ * GET /auth/me
+ * Returns the currently linked Gmail user (first user with a refresh token). Used by extension to show "Linked as email" and persist linked state.
+ */
+router.get('/auth/me', async (req, res) => {
+  try {
+    const db = getDb();
+    const user = await db.get(
+      'SELECT id, email FROM users WHERE encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ? LIMIT 1',
+      ''
+    );
+    if (!user) {
+      return res.json({ linked: false, email: null, id: null });
+    }
+    res.json({ linked: true, email: user.email, id: user.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /auth/url
  * Query: success_redirect (optional) - URL to redirect after OAuth (e.g. chrome-extension://id/success.html)
  * Returns OAuth URL for extension to open in a new tab.
  */
-router.get('/auth/url', (req, res) => {
+router.get('/auth/url', async (req, res) => {
   const state = uuidv4();
   const successRedirect = req.query.success_redirect || process.env.OAUTH_SUCCESS_REDIRECT;
+  const db = getDb();
   if (successRedirect) {
-    const db = getDb();
-    db.prepare('INSERT OR REPLACE INTO oauth_states (state, success_redirect) VALUES (?, ?)').run(state, successRedirect);
+    await db.run(
+      'INSERT INTO oauth_states (state, success_redirect) VALUES (?, ?) ON CONFLICT (state) DO UPDATE SET success_redirect = EXCLUDED.success_redirect',
+      state,
+      successRedirect
+    );
   } else {
-    getDb().prepare('INSERT INTO oauth_states (state) VALUES (?)').run(state);
+    await db.run('INSERT INTO oauth_states (state) VALUES (?)', state);
   }
   const baseUrl = getAuthUrl();
   const url = `${baseUrl}&state=${encodeURIComponent(state)}`;
@@ -35,7 +59,7 @@ router.get('/oauth/callback', async (req, res) => {
   const { code, state } = req.query;
   console.log('[OAuth callback]', { hasCode: !!code, hasState: !!state, queryKeys: Object.keys(req.query || {}), url: req.url?.slice(0, 120) });
   const db = getDb();
-  const row = state ? db.prepare('SELECT success_redirect FROM oauth_states WHERE state = ?').get(state) : null;
+  const row = state ? await db.get('SELECT success_redirect FROM oauth_states WHERE state = ?', state) : null;
   let redirectBase = (row && row.success_redirect) || process.env.OAUTH_SUCCESS_REDIRECT || 'http://localhost:3000/success.html';
   if (redirectBase.includes('your_extension_id')) redirectBase = 'http://localhost:3000/success.html';
 
@@ -54,7 +78,7 @@ router.get('/oauth/callback', async (req, res) => {
     return redirectError('Backend .env: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Web application client from Google Cloud, not the Chrome app). Restart the backend.');
   }
   if (state && row) {
-    db.prepare('DELETE FROM oauth_states WHERE state = ?').run(state);
+    await db.run('DELETE FROM oauth_states WHERE state = ?', state);
   }
 
   try {
@@ -65,10 +89,13 @@ router.get('/oauth/callback', async (req, res) => {
     }
 
     const encrypted = encrypt(refreshToken);
-    db.prepare(
+    await db.run(
       `INSERT INTO users (id, email, encrypted_refresh_token) VALUES (?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET encrypted_refresh_token = excluded.encrypted_refresh_token`
-    ).run(email, email, encrypted);
+       ON CONFLICT(id) DO UPDATE SET encrypted_refresh_token = EXCLUDED.encrypted_refresh_token`,
+      email,
+      email,
+      encrypted
+    );
 
     console.log('[OAuth callback] success, redirecting to', redirectBase);
     return res.redirect(redirectBase + '?linked=1');

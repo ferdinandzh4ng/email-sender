@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { initDb } from './db.js';
 import authRoutes from './routes/auth.js';
 import campaignRoutes from './routes/campaigns.js';
+import templateRoutes from './routes/templates.js';
 import { startScheduler } from './scheduler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ async function start() {
 
   app.use('/', authRoutes);
   app.use('/campaigns', campaignRoutes);
+  app.use('/templates', templateRoutes);
 
   app.get('/health', (req, res) => res.json({ ok: true }));
 

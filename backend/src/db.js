@@ -1,119 +1,49 @@
-import initSqlJs from 'sql.js';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import pg from 'pg';
+const { Pool } = pg;
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = process.env.SQLITE_PATH || join(__dirname, '..', 'data', 'email_sender.db');
+let pool;
 
-let db;
-let SQL;
-
-function persist() {
-  if (!db || !dbPath) return;
-  try {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    writeFileSync(dbPath, buffer);
-  } catch (e) {
-    console.error('DB persist error:', e.message);
-  }
+function toPgParams(sql) {
+  let n = 0;
+  const out = sql.replace(/\?/g, () => `$${++n}`);
+  return out;
 }
 
-// sql.js rejects undefined in bind(); use null instead
-function normalizeParams(params) {
-  return params.map((p) => (p === undefined ? null : p));
+async function query(sql, params = []) {
+  const pgSql = toPgParams(sql);
+  const normalized = params.map((p) => (p === undefined ? null : p));
+  const res = await pool.query(pgSql, normalized);
+  return res;
 }
 
-function wrapDb(database) {
-  return {
-    prepare(sql) {
-      return {
-        run(...params) {
-          database.run(sql, normalizeParams(params));
-          persist();
-        },
-        get(...params) {
-          const stmt = database.prepare(sql);
-          stmt.bind(normalizeParams(params));
-          const row = stmt.step() ? stmt.getAsObject() : null;
-          stmt.free();
-          return row;
-        },
-        all(...params) {
-          const stmt = database.prepare(sql);
-          stmt.bind(normalizeParams(params));
-          const rows = [];
-          while (stmt.step()) rows.push(stmt.getAsObject());
-          stmt.free();
-          return rows;
-        },
-      };
-    },
-  };
-}
-
-function runMigrations(database) {
-  const statements = [
-    `CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      encrypted_refresh_token TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS oauth_states (
-      state TEXT PRIMARY KEY,
-      success_redirect TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS scheduled_jobs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      send_at TEXT NOT NULL,
-      timezone TEXT NOT NULL,
-      subject_template TEXT NOT NULL,
-      body_template TEXT NOT NULL,
-      csv_rows TEXT NOT NULL,
-      attachment_storage_key TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS sent_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      job_id TEXT NOT NULL,
-      recipient_email TEXT NOT NULL,
-      gmail_message_id TEXT,
-      sent_at TEXT,
-      error TEXT,
-      FOREIGN KEY (job_id) REFERENCES scheduled_jobs(id)
-    )`,
-    'CREATE INDEX IF NOT EXISTS idx_jobs_send_at ON scheduled_jobs(send_at)',
-    'CREATE INDEX IF NOT EXISTS idx_jobs_status ON scheduled_jobs(status)',
-    'CREATE INDEX IF NOT EXISTS idx_sent_log_job ON sent_log(job_id)',
-  ];
-  for (const sql of statements) {
-    database.run(sql);
-  }
-  persist();
-}
+export const db = {
+  async run(sql, ...params) {
+    await query(sql, params);
+  },
+  async get(sql, ...params) {
+    const res = await query(sql, params);
+    return res.rows[0] ?? null;
+  },
+  async all(sql, ...params) {
+    const res = await query(sql, params);
+    return res.rows;
+  },
+};
 
 export function getDb() {
-  if (!db) throw new Error('DB not initialized. Call await initDb() first.');
-  return wrapDb(db);
+  if (!pool) throw new Error('DB not initialized. Call await initDb() first.');
+  return db;
 }
 
 export async function initDb() {
-  if (db) return wrapDb(db);
-  const dir = dirname(dbPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  SQL = await initSqlJs();
-  if (existsSync(dbPath)) {
-    const buffer = readFileSync(dbPath);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
+  if (pool) return db;
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required (Supabase Postgres connection string). See README.');
   }
-  runMigrations(db);
-  return wrapDb(db);
+  pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes('supabase') ? { rejectUnauthorized: false } : undefined,
+  });
+  return db;
 }

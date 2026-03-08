@@ -9,26 +9,33 @@ Chrome extension + backend to send templated emails from a CSV, with optional sc
 
 ## Backend setup
 
-1. **Google Cloud Console**
+1. **Supabase (database and file storage)**
+   - Create a project at [supabase.com](https://supabase.com).
+   - In **SQL Editor**, run the script in `backend/supabase-schema.sql` to create tables (`users`, `oauth_states`, `scheduled_jobs`, `sent_log`, `templates`).
+   - In **Project Settings → Database**, copy the connection string (URI) and set it as `DATABASE_URL` in `.env`.
+   - For attachments (so scheduled campaigns work after restart or when the backend runs on Render): in **Storage**, create a bucket named `attachments` (public or private; the backend uses the service role). In **Project Settings → API**, copy **Project URL** and **service_role** key and set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env`. If these are not set, uploads use local disk (not suitable for production).
+
+2. **Google Cloud Console**
    - Create a project and enable the Gmail API.
    - Create an **OAuth 2.0 Client ID** of type **Web application**.
    - Add authorized redirect URI: `http://localhost:3000/oauth/callback` (and your production URL if you deploy).
    - Note the Client ID and Client Secret.
 
-2. **Install and configure**
+3. **Install and configure**
    ```bash
    cd backend
    npm install
    cp .env.example .env
    ```
-   The backend uses `better-sqlite3` (native addon). If `npm install` fails to build it, ensure you have build tools (e.g. Xcode Command Line Tools on macOS, or `build-essential` on Linux).
    Edit `.env`:
+   - `DATABASE_URL`: Supabase Postgres connection string (required).
    - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` from the step above.
    - `ENCRYPTION_KEY`: 32-byte hex (e.g. `openssl rand -hex 32`).
    - `OAUTH_REDIRECT_URI`: must match the redirect URI in Google (e.g. `http://localhost:3000/oauth/callback`).
    - Optional: `OAUTH_SUCCESS_REDIRECT` — only needed if you do not pass `success_redirect` from the extension (extension passes it by default).
+   - Optional: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for attachment storage (recommended for production).
 
-3. **Run**
+4. **Run**
    ```bash
    npm start
    ```
@@ -53,7 +60,7 @@ Chrome extension + backend to send templated emails from a CSV, with optional sc
 
 1. **Templates (Options page)**
    - Open the extension and click **Open Dashboard & Campaigns** (or right-click the icon → Options).
-   - In **Templates**, set subject and body with placeholders like `{{first_name}}`, `{{company}}`. Save.
+   - In **Templates**, set subject and body with placeholders like `{{first_name}}`, `{{company}}`. Click **Save template** (stored in Supabase so they persist across devices and restarts).
 
 2. **Link Gmail for scheduled sends**
    - In **Campaign**, click **Link Gmail for scheduled sends**. Sign in with Google in the new tab and allow access. After redirect, Gmail is linked for the backend so it can send at scheduled times.
