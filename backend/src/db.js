@@ -2,11 +2,7 @@ import pg from 'pg';
 import dns from 'dns';
 
 const { Pool } = pg;
-
-// Prefer IPv4 so connections work on Render (which often has no IPv6).
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder('ipv4first');
-}
+const dnsPromises = dns.promises;
 
 let pool;
 
@@ -56,20 +52,45 @@ export async function initDb() {
       'Encode special chars in password: # → %23, @ → %40, $ → %24, / → %2F, ? → %3F'
     );
   }
+  let parsed;
   try {
     const u = new URL(trimmed.replace(/^postgresql:\/\//, 'https://'));
     if (!u.hostname || u.hostname === '$' || u.hostname.length < 2) {
       throw new Error('DATABASE_URL host is missing or invalid. Encode special characters in the password (e.g. @ → %40, $ → %24).');
     }
+    parsed = u;
   } catch (e) {
     if (e.message && e.message.includes('DATABASE_URL')) throw e;
     throw new Error(
       'DATABASE_URL could not be parsed. Encode special chars in password: # → %23, @ → %40, $ → %24, / → %2F, ? → %3F'
     );
   }
-  pool = new Pool({
-    connectionString: trimmed,
-    ssl: trimmed.includes('supabase') ? { rejectUnauthorized: false } : undefined,
-  });
+
+  const hostname = parsed.hostname;
+  const useSsl = trimmed.includes('supabase');
+  let poolConfig;
+
+  try {
+    const ipv4 = await dnsPromises.resolve4(hostname);
+    if (ipv4 && ipv4.length > 0) {
+      poolConfig = {
+        host: ipv4[0],
+        port: parseInt(parsed.port || '5432', 10),
+        user: decodeURIComponent(parsed.username || 'postgres'),
+        password: decodeURIComponent(parsed.password || ''),
+        database: (parsed.pathname || '/postgres').slice(1) || 'postgres',
+        ssl: useSsl ? { rejectUnauthorized: false, servername: hostname } : undefined,
+      };
+    }
+  } catch (_) {}
+
+  if (!poolConfig) {
+    poolConfig = {
+      connectionString: trimmed,
+      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+    };
+  }
+
+  pool = new Pool(poolConfig);
   return db;
 }
