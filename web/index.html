@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gmail Campaign Sender</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">G</div>
+        <span class="logo-text">Campaign Sender</span>
+      </div>
+      <nav class="side-nav">
+        <button type="button" data-panel="dashboard" class="active">Dashboard</button>
+        <button type="button" data-panel="templates">Templates</button>
+        <button type="button" data-panel="campaign">New campaign</button>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="header">
+        <span class="header-title" id="headerTitle">Dashboard</span>
+        <div class="header-user" id="headerUser">
+          <span class="not-linked">Checking…</span>
+        </div>
+      </header>
+      <div class="content">
+        <div id="panel-dashboard" class="panel active">
+          <div class="stat-cards" id="statCards"></div>
+          <div class="card">
+            <h3>Emails to be sent</h3>
+            <div id="scheduledList"></div>
+          </div>
+          <div class="card">
+            <h3>Saved templates</h3>
+            <div id="dashboardTemplates" class="template-cards"></div>
+            <p style="margin:12px 0 0; font-size:13px; color: var(--text-muted);">Pick a template below to start a campaign.</p>
+          </div>
+          <div class="card">
+            <h3>Sent campaigns</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="refreshDashboard">Refresh</button>
+            <div id="dashboardList"></div>
+          </div>
+        </div>
+
+        <div id="panel-templates" class="panel">
+          <div class="card">
+            <h3>Email template</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 12px;">Use placeholders like {{first_name}}, {{company}} — they must match your CSV columns.</p>
+            <label>Name</label>
+            <input type="text" id="templateName" placeholder="e.g. Job application">
+            <label>Subject</label>
+            <input type="text" id="templateSubject" placeholder="e.g. Hi {{first_name}}, applying to {{company}}">
+            <label>Body</label>
+            <textarea id="templateBody" placeholder="Dear {{first_name}},&#10;&#10;..."></textarea>
+            <div class="action-row">
+              <button type="button" class="btn btn-primary" id="saveTemplate">Save template</button>
+              <span id="saveTemplateStatus" class="status-msg"></span>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Your templates</h3>
+            <div id="templatesList" class="template-cards"></div>
+          </div>
+        </div>
+
+        <div id="panel-campaign" class="panel">
+          <div class="card">
+            <h3>Start a campaign</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 12px;">Link Gmail once for scheduled and send-now. Then pick a template, upload CSV, and send or schedule.</p>
+            <button type="button" class="btn btn-secondary" id="linkGmail">Link Gmail for scheduled sends</button>
+            <div id="linkGmailStatus" style="margin-top:8px; font-size:13px; color: var(--text-muted);"></div>
+            <label style="margin-top:16px;">Send test email (uses linked account)</label>
+            <div class="action-row" style="align-items: flex-end;">
+              <input type="email" id="testEmailTo" placeholder="you@example.com" style="width: 220px; margin-bottom: 0;">
+              <button type="button" class="btn btn-secondary" id="sendTestBtn">Send test</button>
+              <span id="testEmailStatus" class="status-msg"></span>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Pick a template</h3>
+            <div id="campaignTemplatePicker" class="template-cards"></div>
+            <label style="margin-top:12px;">Subject (editable)</label>
+            <input type="text" id="campaignSubject" placeholder="Subject line">
+            <label>Body (editable)</label>
+            <textarea id="campaignBody" placeholder="Body"></textarea>
+          </div>
+          <div class="card">
+            <h3>Recipients & attachment</h3>
+            <label>CSV file (must have <code>email</code> column)</label>
+            <input type="file" id="csvFile" accept=".csv">
+            <div id="csvInfo" class="csv-info"></div>
+            <label>Preview (first row)</label>
+            <div id="preview" class="preview-box"></div>
+            <label>Optional: one attachment for all (e.g. resume)</label>
+            <input type="file" id="attachmentFile">
+          </div>
+          <div class="card">
+            <h3>Send</h3>
+            <label>Send at (for schedule only)</label>
+            <input type="datetime-local" id="sendAt">
+            <div class="action-row">
+              <button type="button" class="btn btn-primary" id="sendNowBtn">Send now</button>
+              <button type="button" class="btn btn-secondary" id="scheduleCampaign">Schedule campaign</button>
+              <span id="scheduleStatus" class="status-msg"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

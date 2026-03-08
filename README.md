@@ -1,11 +1,11 @@
 # Gmail Campaign Sender
 
-Chrome extension + backend to send templated emails from a CSV, with optional scheduling (even when the browser is closed) and one attachment per campaign (e.g. resume). Includes a dashboard of sent campaigns.
+Web app (or Chrome extension) + backend to send templated emails from a CSV, with optional scheduling and one attachment per campaign (e.g. resume). Includes a dashboard of sent campaigns.
 
 ## Architecture
 
-- **Chrome extension**: Templates with `{{placeholders}}`, CSV upload and merge preview, optional file attachment, schedule time picker, link Gmail for scheduled sends, and dashboard.
-- **Backend (Node)**: OAuth callback to store Gmail refresh token, schedule jobs, cron that sends due emails via Gmail API, and stores sent log.
+- **Web app (Vercel)** or **Chrome extension**: Templates with `{{placeholders}}`, CSV upload and merge preview, optional file attachment, schedule time picker, link Gmail for scheduled sends, dashboard, and send-now.
+- **Backend (Node, e.g. Render)**: OAuth callback to store Gmail refresh token, schedule jobs, cron that sends due emails via Gmail API, and stores sent log.
 
 ## Backend setup
 
@@ -18,7 +18,7 @@ Chrome extension + backend to send templated emails from a CSV, with optional sc
 2. **Google Cloud Console**
    - Create a project and enable the Gmail API.
    - Create an **OAuth 2.0 Client ID** of type **Web application**.
-   - Add authorized redirect URI: `http://localhost:3000/oauth/callback` (and your production URL if you deploy).
+   - Add authorized redirect URI: `http://localhost:3000/oauth/callback` and your production backend URL (e.g. `https://your-backend.onrender.com/oauth/callback`) if you deploy.
    - Note the Client ID and Client Secret.
 
 3. **Install and configure**
@@ -34,6 +34,7 @@ Chrome extension + backend to send templated emails from a CSV, with optional sc
    - `OAUTH_REDIRECT_URI`: must match the redirect URI in Google (e.g. `http://localhost:3000/oauth/callback`).
    - Optional: `OAUTH_SUCCESS_REDIRECT` — only needed if you do not pass `success_redirect` from the extension (extension passes it by default).
    - Optional: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for attachment storage (recommended for production).
+   - For **web app** deployment: set `ALLOWED_ORIGINS` to your Vercel app URL (e.g. `https://your-app.vercel.app`) or comma-separated list. Alternatively use `WEB_APP_ORIGIN` or keep `EXTENSION_ORIGIN` for the extension only.
 
 4. **Run**
    ```bash
@@ -55,6 +56,26 @@ Chrome extension + backend to send templated emails from a CSV, with optional sc
 
 4. **Backend URL**
    - Default is `http://localhost:3000`. Stored in `chrome.storage.local`; you can change it in the extension code (`shared.js` / `popup.js`) or add a settings page.
+
+## Web app (Vercel) setup
+
+Use the web app instead of the extension so you can use the same UI in any browser.
+
+1. **Backend**
+   - Deploy the backend (e.g. on Render) and set `ALLOWED_ORIGINS` to your Vercel URL, e.g. `https://your-app.vercel.app`.
+   - In Google Cloud Console, add the backend OAuth redirect URI (e.g. `https://your-backend.onrender.com/oauth/callback`).
+
+2. **Deploy the web app to Vercel**
+   ```bash
+   cd web
+   npm install
+   ```
+   - Create a `.env` (or set in Vercel Dashboard → Settings → Environment Variables):
+     - `VITE_BACKEND_URL` = your backend URL (e.g. `https://your-backend.onrender.com`), no trailing slash.
+   - Deploy: connect the repo to Vercel, set **Root Directory** to `web`, **Build Command** to `npm run build`, **Output Directory** to `dist`.
+
+3. **Usage**
+   - Open the Vercel URL. Link Gmail (you’ll be redirected to Google and back to `/linked.html`). Create templates, upload CSV, and send now or schedule. “Send test” uses the linked account (no Chrome identity needed).
 
 ## Usage
 

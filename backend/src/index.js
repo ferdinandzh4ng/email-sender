@@ -15,8 +15,15 @@ async function start() {
   await initDb();
   const app = express();
 
-  const extensionOrigin = process.env.EXTENSION_ORIGIN || '*';
-  app.use(cors({ origin: extensionOrigin }));
+  const allowed = process.env.ALLOWED_ORIGINS || process.env.EXTENSION_ORIGIN || process.env.WEB_APP_ORIGIN || '*';
+  const origins = typeof allowed === 'string' && allowed.includes(',')
+    ? allowed.split(',').map((o) => o.trim()).filter(Boolean)
+    : [allowed].flat();
+  app.use(cors({
+    origin: origins.length > 1
+      ? (origin, cb) => cb(null, origin && origins.includes(origin) ? origin : origins[0])
+      : origins[0],
+  }));
   app.use(express.json({ limit: '30mb' }));
   app.use(express.static(join(__dirname, '..')));
 

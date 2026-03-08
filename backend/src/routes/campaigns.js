@@ -37,6 +37,41 @@ router.post('/send-test', async (req, res) => {
 });
 
 /**
+ * POST /campaigns/send-test-linked
+ * Send a test email using the linked Gmail account (no token from client). Body: { to }
+ * Used by the web app where Chrome identity is not available.
+ */
+router.post('/send-test-linked', async (req, res) => {
+  try {
+    const { to } = req.body || {};
+    if (!to || !String(to).trim()) {
+      return res.status(400).json({ error: 'to (email address) required' });
+    }
+    const db = getDb();
+    const user = await db.get(
+      'SELECT encrypted_refresh_token FROM users WHERE encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ? LIMIT 1',
+      ''
+    );
+    if (!user) {
+      return res.status(400).json({ error: 'No linked Gmail account. Link Gmail in the app first.' });
+    }
+    const refreshToken = decrypt(user.encrypted_refresh_token);
+    const accessToken = await getAccessToken(refreshToken);
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Could not get access token. Try linking Gmail again.' });
+    }
+    const messageId = await sendEmail(accessToken, {
+      to: String(to).trim(),
+      subject: 'Test from Gmail Campaign Sender',
+      body: 'This is a test email.',
+    });
+    res.json({ success: true, messageId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /campaigns/schedule
  * Body: { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key?, userId? }
  * userId: optional; if not provided we use a default or require header. For multi-user we'd use session; for MVP we use first user or single user.
