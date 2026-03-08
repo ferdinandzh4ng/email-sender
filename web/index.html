@@ -72,8 +72,14 @@
         <div id="panel-campaign" class="panel">
           <div class="card">
             <h3>Start a campaign</h3>
-            <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 12px;">Link Gmail once for scheduled and send-now. Then pick a template, upload CSV, and send or schedule.</p>
-            <button type="button" class="btn btn-secondary" id="linkGmail">Link Gmail for scheduled sends</button>
+            <div id="linkGmailSection">
+              <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 12px;">Sign in with Google to send from your Gmail. Then pick a template, upload CSV, and send or schedule.</p>
+              <button type="button" class="btn btn-secondary" id="linkGmail">Sign in with Google</button>
+            </div>
+            <div id="linkedAccountSection" style="display: none;">
+              <p style="color: var(--accent); font-size: 13px; margin: 0 0 8px;"><strong id="linkedAccountEmail"></strong></p>
+              <p style="color: var(--text-muted); font-size: 12px; margin: 0 0 8px;">Sending from this account. <button type="button" class="btn btn-secondary btn-sm" id="relinkGmail">Use a different account</button></p>
+            </div>
             <div id="linkGmailStatus" style="margin-top:8px; font-size:13px; color: var(--text-muted);"></div>
             <label style="margin-top:16px;">Send test email (uses linked account)</label>
             <div class="action-row" style="align-items: flex-end;">
@@ -103,7 +109,10 @@
           <div class="card">
             <h3>Send</h3>
             <label>Send at (for schedule only)</label>
-            <input type="datetime-local" id="sendAt">
+            <div class="datetime-wrap">
+              <input type="datetime-local" id="sendAt">
+              <button type="button" class="btn-calendar" id="openCalendar" title="Pick date & time" aria-label="Open calendar">📅 Pick date & time</button>
+            </div>
             <div class="action-row">
               <button type="button" class="btn btn-primary" id="sendNowBtn">Send now</button>
               <button type="button" class="btn btn-secondary" id="scheduleCampaign">Schedule campaign</button>

@@ -14,18 +14,36 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+function updateLinkedUI() {
+  const headerEl = document.getElementById('headerUser');
+  const linkSection = document.getElementById('linkGmailSection');
+  const linkedSection = document.getElementById('linkedAccountSection');
+  const linkedEmailEl = document.getElementById('linkedAccountEmail');
+  if (linkedUser.linked && linkedUser.email) {
+    if (headerEl) headerEl.innerHTML = `<span class="avatar">${(linkedUser.email[0] || '?').toUpperCase()}</span><span><span class="linked-badge">Linked</span><span class="email" title="${escapeAttr(linkedUser.email)}">${escapeHtml(linkedUser.email)}</span></span>`;
+    if (linkSection) linkSection.style.display = 'none';
+    if (linkedSection) linkedSection.style.display = 'block';
+    if (linkedEmailEl) linkedEmailEl.textContent = linkedUser.email;
+  } else {
+    if (headerEl) headerEl.innerHTML = '<span class="not-linked">Not signed in — sign in with Google in New campaign</span>';
+    if (linkSection) linkSection.style.display = 'block';
+    if (linkedSection) linkedSection.style.display = 'none';
+  }
+}
+
 async function loadLinkedUser() {
   try {
     const data = await api.fetchBackend('/auth/me');
     linkedUser = { linked: !!data.linked, email: data.email || null };
-    const el = document.getElementById('headerUser');
-    if (linkedUser.linked && linkedUser.email) {
-      el.innerHTML = `<span class="avatar">${(linkedUser.email[0] || '?').toUpperCase()}</span><span><span class="linked-badge">Linked</span><span class="email" title="${escapeAttr(linkedUser.email)}">${escapeHtml(linkedUser.email)}</span></span>`;
-    } else {
-      el.innerHTML = '<span class="not-linked">Not linked — link Gmail in New campaign</span>';
-    }
+    updateLinkedUI();
   } catch (err) {
-    document.getElementById('headerUser').innerHTML = '<span class="not-linked">Backend unreachable</span>';
+    linkedUser = { linked: false, email: null };
+    const headerEl = document.getElementById('headerUser');
+    if (headerEl) headerEl.innerHTML = '<span class="not-linked">Backend unreachable — set VITE_BACKEND_URL?</span>';
+    const linkSection = document.getElementById('linkGmailSection');
+    const linkedSection = document.getElementById('linkedAccountSection');
+    if (linkSection) linkSection.style.display = 'block';
+    if (linkedSection) linkedSection.style.display = 'none';
   }
 }
 
@@ -40,7 +58,10 @@ document.querySelectorAll('.side-nav [data-panel]').forEach((btn) => {
     document.getElementById('headerTitle').textContent = titles[panel] || panel;
     if (panel === 'dashboard') loadDashboard();
     if (panel === 'templates') loadTemplatesList();
-    if (panel === 'campaign') loadCampaignTemplatePicker();
+    if (panel === 'campaign') {
+      loadLinkedUser();
+      loadCampaignTemplatePicker();
+    }
   });
 });
 
@@ -146,6 +167,16 @@ document.getElementById('linkGmail').addEventListener('click', async () => {
     window.location.href = url;
   } catch (err) {
     alert('Failed to get auth URL. Is the backend running? ' + err.message);
+  }
+});
+
+document.getElementById('relinkGmail').addEventListener('click', async () => {
+  const successRedirect = window.location.origin + '/linked.html';
+  try {
+    const url = await api.getAuthUrl(successRedirect);
+    window.location.href = url;
+  } catch (err) {
+    alert('Failed to get auth URL. ' + err.message);
   }
 });
 
@@ -275,6 +306,17 @@ function getCampaignPayload() {
   return { subject_template: subject, body_template: body, csv_rows: csvRows, timezone };
 }
 
+function goToDashboard() {
+  const btn = document.querySelector('.side-nav [data-panel="dashboard"]');
+  if (btn) btn.click();
+}
+
+document.getElementById('openCalendar').addEventListener('click', () => {
+  const input = document.getElementById('sendAt');
+  input.focus();
+  if (typeof input.showPicker === 'function') input.showPicker();
+});
+
 document.getElementById('sendNowBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('scheduleStatus');
   statusEl.textContent = '';
@@ -314,9 +356,9 @@ document.getElementById('scheduleCampaign').addEventListener('click', async () =
   if (attachmentStorageKey) payload.attachment_storage_key = attachmentStorageKey;
   try {
     await api.fetchBackend('/campaigns/schedule', { method: 'POST', body: JSON.stringify(payload) });
-    statusEl.textContent = 'Scheduled. Emails will be sent at the chosen time.';
+    statusEl.textContent = 'Scheduled. Redirecting to dashboard…';
     statusEl.className = 'success';
-    loadDashboard();
+    goToDashboard();
   } catch (err) {
     statusEl.textContent = err.message;
     statusEl.className = 'error';
@@ -359,6 +401,11 @@ async function loadDashboard() {
 
 document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);
 
-loadLinkedUser();
+loadLinkedUser().then(() => {
+  if (sessionStorage.getItem('email-sender-just-linked')) {
+    sessionStorage.removeItem('email-sender-just-linked');
+    loadLinkedUser();
+  }
+});
 loadDashboard();
 loadCampaignTemplatePicker();
