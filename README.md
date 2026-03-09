@@ -42,6 +42,9 @@ Web app (or Chrome extension) + backend to send templated emails from a CSV, wit
    ```
    Server runs at `http://localhost:3000`. Scheduler runs every minute to send due campaigns.
 
+5. **Keep backend awake (Render free tier)**  
+   A GitHub Actions workflow (`.github/workflows/keepalive.yml`) pings `GET /health` every 10 minutes so the service doesn’t spin down. Add a repository secret: **Settings → Secrets and variables → Actions → New repository secret**. Name: `BACKEND_URL`, Value: your backend base URL with no trailing slash (e.g. `https://your-app.onrender.com`).
+
 ## Extension setup
 
 1. **Same Google OAuth client (Chrome)**
