@@ -76,19 +76,33 @@ function resetCampaignPanel() {
 }
 
 let templatesList = [];
-function renderTemplatesList(container, list, onSelect) {
+function renderTemplatesList(container, list, onSelect, onDelete) {
   if (!container) return;
   if (!list || list.length === 0) {
     container.innerHTML = '<p style="color: var(--text-muted);">No templates yet. Create one above.</p>';
     return;
   }
-  container.innerHTML = list.map((t) => `<div class="template-card" data-id="${t.id}" role="button" tabindex="0"><div class="name">${escapeHtml(t.name || 'Default')}</div><div class="subject">${escapeHtml((t.subject || '').slice(0, 60))}${(t.subject || '').length > 60 ? '…' : ''}</div><div class="updated">${t.updated_at ? new Date(t.updated_at).toLocaleDateString() : ''}</div></div>`).join('');
+  const showDelete = typeof onDelete === 'function';
+  container.innerHTML = list.map((t) => {
+    const cardHtml = `<div class="template-card" data-id="${t.id}" role="button" tabindex="0"><div class="template-card-body"><div class="name">${escapeHtml(t.name || 'Default')}</div><div class="subject">${escapeHtml((t.subject || '').slice(0, 60))}${(t.subject || '').length > 60 ? '…' : ''}</div><div class="updated">${t.updated_at ? new Date(t.updated_at).toLocaleDateString() : ''}</div></div>${showDelete ? `<button type="button" class="template-card-delete btn btn-secondary btn-sm" data-id="${escapeHtml(String(t.id))}" title="Delete template">Delete</button>` : ''}</div>`;
+    return cardHtml;
+  }).join('');
   container.querySelectorAll('.template-card').forEach((card) => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.template-card-delete')) return;
       const t = list.find((x) => String(x.id) === String(card.dataset.id));
       if (t && onSelect) onSelect(t);
     });
   });
+  if (showDelete) {
+    container.querySelectorAll('.template-card-delete').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const t = list.find((x) => String(x.id) === String(btn.dataset.id));
+        if (t && onDelete) onDelete(t);
+      });
+    });
+  }
 }
 
 async function loadTemplatesList() {
@@ -100,6 +114,31 @@ async function loadTemplatesList() {
       document.getElementById('templateSubject').value = t.subject || '';
       document.getElementById('templateBody').value = t.body || '';
       document.getElementById('saveTemplate').dataset.editId = t.id;
+      const saveBtn = document.getElementById('saveTemplate');
+      if (saveBtn) saveBtn.textContent = 'Update template';
+      document.querySelectorAll('#templatesList .template-card').forEach((c) => c.classList.remove('selected'));
+      const sel = document.querySelector(`#templatesList .template-card[data-id="${t.id}"]`);
+      if (sel) sel.classList.add('selected');
+    }, async (t) => {
+      if (!confirm(`Delete template "${(t.name || 'Default').replace(/"/g, '')}"?`)) return;
+      const btn = document.querySelector(`#templatesList .template-card-delete[data-id="${t.id}"]`);
+      if (btn) { btn.disabled = true; btn.textContent = '…'; }
+      try {
+        await api.fetchBackend(`/templates/${t.id}`, { method: 'DELETE' });
+        if (document.getElementById('saveTemplate').dataset.editId === String(t.id)) {
+          document.getElementById('saveTemplate').dataset.editId = '';
+          document.getElementById('saveTemplate').textContent = 'Save template';
+          document.getElementById('templateName').value = '';
+          document.getElementById('templateSubject').value = '';
+          document.getElementById('templateBody').value = '';
+        }
+        loadTemplatesList();
+        loadCampaignTemplatePicker();
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+        document.getElementById('saveTemplateStatus').textContent = err.message || 'Delete failed';
+        document.getElementById('saveTemplateStatus').className = 'error';
+      }
     });
   } catch (err) {
     templatesList = [];
@@ -418,7 +457,27 @@ async function loadDashboard() {
     const sentCount = sent.reduce((acc, c) => acc + (c.sent_count || 0), 0);
     statEl.innerHTML = `<div class="stat-card"><div class="num">${scheduled.length}</div><div class="label">Scheduled</div></div><div class="stat-card"><div class="num">${sent.length}</div><div class="label">Sent campaigns</div></div><div class="stat-card"><div class="num">${sentCount}</div><div class="label">Emails sent</div></div>`;
     if (scheduled.length === 0) scheduledEl.innerHTML = '<p style="color: var(--text-muted);">No emails scheduled.</p>';
-    else scheduledEl.innerHTML = '<ul class="schedule-list">' + scheduled.map((c) => `<li><div><div class="subject">${escapeHtml(c.subject_template)}</div><div class="meta">${c.recipient_count} recipient(s) · ${new Date(c.send_at).toLocaleString()}</div></div></li>`).join('') + '</ul>';
+    else {
+      scheduledEl.innerHTML = '<ul class="schedule-list">' + scheduled.map((c) => `<li data-id="${escapeHtml(c.id)}"><div><div class="subject">${escapeHtml(c.subject_template)}</div><div class="meta">${c.recipient_count} recipient(s) · ${new Date(c.send_at).toLocaleString()}</div></div><button type="button" class="btn btn-secondary btn-sm cancel-campaign">Cancel</button></li>`).join('') + '</ul>';
+      scheduledEl.querySelectorAll('.cancel-campaign').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          const li = e.target.closest('li');
+          const id = li?.dataset?.id;
+          if (!id) return;
+          e.target.disabled = true;
+          e.target.textContent = 'Cancelling…';
+          try {
+            await api.fetchBackend(`/campaigns/scheduled/${id}`, { method: 'DELETE' });
+            loadDashboard();
+          } catch (err) {
+            e.target.disabled = false;
+            e.target.textContent = 'Cancel';
+            scheduledEl.insertAdjacentHTML('beforeend', '<p class="error">' + escapeHtml(err.message) + '</p>');
+            setTimeout(() => scheduledEl.querySelector('.error')?.remove(), 3000);
+          }
+        });
+      });
+    }
     renderTemplatesList(dashTplEl, tplList, (t) => {
       pendingTemplateId = t.id;
       document.querySelector('.side-nav [data-panel="campaign"]').click();

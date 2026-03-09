@@ -27,6 +27,24 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * DELETE /templates/:id
+ * Delete a template by id.
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid template id' });
+    const db = getDb();
+    const row = await db.get('SELECT id FROM templates WHERE id = ?', id);
+    if (!row) return res.status(404).json({ error: 'Template not found' });
+    await db.run('DELETE FROM templates WHERE id = ?', id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /templates/:id
  * Returns one template by id.
  */

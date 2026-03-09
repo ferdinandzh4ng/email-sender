@@ -75,17 +75,23 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .stat-card .num { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
 .stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .template-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-.template-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+.template-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .template-card:hover { border-color: var(--accent); }
 .template-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.template-card-body { min-width: 0; flex: 1; }
 .template-card .name { font-weight: 600; margin-bottom: 4px; }
 .template-card .subject { font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .template-card .updated { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.template-card-delete { flex-shrink: 0; padding: 6px 12px; font-size: 13px; }
+.template-card-delete:hover { border-color: var(--error); color: var(--error); }
 .schedule-list { list-style: none; padding: 0; margin: 0; }
 .schedule-list li { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .schedule-list li:last-child { border-bottom: none; }
 .schedule-list .subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 12px; }
 .schedule-list .meta { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.schedule-list .btn-sm { padding: 6px 12px; font-size: 13px; flex-shrink: 0; }
+.schedule-list .cancel-campaign { margin-left: 8px; }
+.schedule-list li > div:first-child { min-width: 0; }
 .action-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
 .status-msg { font-size: 14px; margin-top: 8px; }
 .datetime-wrap { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }

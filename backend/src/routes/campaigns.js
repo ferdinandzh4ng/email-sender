@@ -172,6 +172,25 @@ router.get('/scheduled', async (req, res) => {
 });
 
 /**
+ * DELETE /campaigns/scheduled/:id
+ * Cancel a pending scheduled campaign (sets status to 'cancelled' so it no longer appears in scheduled list).
+ */
+router.delete('/scheduled/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'Campaign id required' });
+    const db = getDb();
+    const job = await db.get('SELECT id, status FROM scheduled_jobs WHERE id = ?', id);
+    if (!job) return res.status(404).json({ error: 'Campaign not found' });
+    if (job.status !== 'pending') return res.status(400).json({ error: 'Only pending campaigns can be cancelled' });
+    await db.run("UPDATE scheduled_jobs SET status = 'cancelled' WHERE id = ?", id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /campaigns/send-now
  * Same body as /schedule but sends immediately (creates job with send_at = now, then runs processDueJobs).
  */
