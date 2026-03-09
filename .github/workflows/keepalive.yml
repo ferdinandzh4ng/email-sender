@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Ping backend health
         env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          BACKEND_URL: https://email-sender-dztw.onrender.com
         run: |
           if [ -z "$BACKEND_URL" ]; then
             echo "BACKEND_URL secret is not set or not visible to this workflow."
