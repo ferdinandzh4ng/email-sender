@@ -3,7 +3,7 @@ name: Keep backend awake
 on:
   schedule:
     # Every 10 minutes
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allow manual run from Actions tab
 jobs:
   ping:
@@ -18,4 +18,4 @@ jobs:
             echo "Add it under: Settings → Secrets and variables → Actions → Repository secrets"
             exit 1
           fi
-          curl -sf --max-time 30 "$BACKEND_URL/health" && echo "OK" || exit 1
+          curl -sf --max-time 90 "$BACKEND_URL/health" && echo "OK" || exit 1
