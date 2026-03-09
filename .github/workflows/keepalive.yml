@@ -13,9 +13,4 @@ jobs:
         env:
           BACKEND_URL: https://email-sender-dztw.onrender.com
         run: |
-          if [ -z "$BACKEND_URL" ]; then
-            echo "BACKEND_URL secret is not set or not visible to this workflow."
-            echo "Add it under: Settings → Secrets and variables → Actions → Repository secrets"
-            exit 1
-          fi
           curl -sf --max-time 90 "$BACKEND_URL/health" && echo "OK" || exit 1
