@@ -19,7 +19,7 @@ router.get('/auth/me', async (req, res) => {
     }
     const db = getDb();
     const user = await db.get(
-      'SELECT id, email FROM users WHERE id = ? AND encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ?',
+      'SELECT id, email FROM users WHERE id = ? AND encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ? LIMIT 1',
       userId,
       ''
     );
@@ -97,7 +97,7 @@ router.get('/oauth/callback', async (req, res) => {
     const encrypted = encrypt(refreshToken);
     await db.run(
       `INSERT INTO users (id, email, encrypted_refresh_token) VALUES (?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET encrypted_refresh_token = EXCLUDED.encrypted_refresh_token, updated_at = NOW()`,
+       ON CONFLICT(id) DO UPDATE SET encrypted_refresh_token = EXCLUDED.encrypted_refresh_token`,
       email,
       email,
       encrypted

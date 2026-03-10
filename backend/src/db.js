@@ -61,6 +61,12 @@ export function getDb() {
   return db;
 }
 
+/** Returns the underlying pg Pool for use by connect-pg-simple etc. Call after initDb(). */
+export function getPool() {
+  if (!pool) throw new Error('DB not initialized. Call await initDb() first.');
+  return pool;
+}
+
 export async function initDb() {
   if (pool) return db;
   const connectionString = process.env.DATABASE_URL;

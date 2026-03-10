@@ -1,20 +1,28 @@
 import 'dotenv/config';
+import { createRequire } from 'node:module';
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { initDb } from './db.js';
+import { initDb, getPool } from './db.js';
 import authRoutes from './routes/auth.js';
 import campaignRoutes from './routes/campaigns.js';
 import templateRoutes from './routes/templates.js';
 import { startScheduler } from './scheduler.js';
 
+const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function start() {
   await initDb();
   const app = express();
+
+  const PgSession = require('connect-pg-simple')(session);
+  const sessionStore = new PgSession({
+    pool: getPool(),
+    createTableIfMissing: true,
+  });
 
   const allowed = process.env.ALLOWED_ORIGINS || process.env.EXTENSION_ORIGIN || process.env.WEB_APP_ORIGIN || '*';
   const raw = typeof allowed === 'string' && allowed.includes(',')
@@ -41,6 +49,7 @@ async function start() {
 
   const sessionSecret = process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY || 'dev-secret-change-in-production';
   app.use(session({
+    store: sessionStore,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
