@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import session from 'express-session';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { initDb } from './db.js';
@@ -21,6 +22,7 @@ async function start() {
     : [allowed].flat();
   const normalize = (o) => (o || '').trim().replace(/\/+$/, '');
   const origins = raw.map(normalize).filter(Boolean);
+  const allowCredentials = origins.length > 0 && origins[0] !== '*';
   app.use(cors({
     origin: origins.length > 1
       ? (origin, cb) => {
@@ -34,7 +36,23 @@ async function start() {
             const norm = normalize(origin);
             cb(null, norm && origins.includes(norm) ? origin : false);
           },
+    credentials: allowCredentials,
   }));
+
+  const sessionSecret = process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY || 'dev-secret-change-in-production';
+  app.use(session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    name: 'email-sender.sid',
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    },
+  }));
+
   app.use(express.json({ limit: '30mb' }));
   app.use(express.static(join(__dirname, '..')));
 

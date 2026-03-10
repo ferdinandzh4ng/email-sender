@@ -18,6 +18,7 @@
   <script>
     if (window.location.search.includes('linked=1')) {
       sessionStorage.setItem('email-sender-just-linked', '1');
+      sessionStorage.setItem('email-sender-signed-in', '1');
       setTimeout(function () { window.location.href = '/'; }, 1200);
     }
   </script>

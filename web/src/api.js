@@ -9,6 +9,7 @@ async function fetchBackend(path, options = {}) {
   const url = base ? base + path : path;
   const res = await fetch(url, {
     ...options,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   if (!res.ok) {
@@ -25,8 +26,15 @@ async function getAuthUrl(successRedirect) {
   return data.url;
 }
 
+async function logout() {
+  const base = getBackend();
+  const url = base ? base + '/auth/logout' : '/auth/logout';
+  await fetch(url, { method: 'POST', credentials: 'include' });
+}
+
 export const api = {
   getBackend,
   fetchBackend,
   getAuthUrl,
+  logout,
 };

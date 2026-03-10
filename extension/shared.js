@@ -26,6 +26,7 @@ async function fetchBackend(path, options = {}) {
   const url = base.replace(/\/$/, '') + path;
   const res = await fetch(url, {
     ...options,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   if (!res.ok) {

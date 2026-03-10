@@ -6,6 +6,7 @@ import { getAccessToken, sendEmail } from '../gmail.js';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import * as storage from '../storage.js';
+import { requireSessionUserId } from '../session.js';
 
 const router = Router();
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(process.cwd(), 'data', 'uploads');
@@ -43,13 +44,16 @@ router.post('/send-test', async (req, res) => {
  */
 router.post('/send-test-linked', async (req, res) => {
   try {
+    const userId = requireSessionUserId(req, res);
+    if (!userId) return;
     const { to } = req.body || {};
     if (!to || !String(to).trim()) {
       return res.status(400).json({ error: 'to (email address) required' });
     }
     const db = getDb();
     const user = await db.get(
-      'SELECT encrypted_refresh_token FROM users WHERE encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ? LIMIT 1',
+      'SELECT encrypted_refresh_token FROM users WHERE id = ? AND encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ?',
+      userId,
       ''
     );
     if (!user) {
@@ -73,12 +77,12 @@ router.post('/send-test-linked', async (req, res) => {
 
 /**
  * POST /campaigns/schedule
- * Body: { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key?, userId? }
- * userId: optional; if not provided we use a default or require header. For multi-user we'd use session; for MVP we use first user or single user.
+ * Body: { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key? }
+ * Uses the signed-in user's session to associate the job.
  */
 router.post('/schedule', async (req, res) => {
   try {
-    const { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key, userId } = req.body;
+    const { sendAt, timezone, subject_template, body_template, csv_rows, attachment_storage_key } = req.body;
     if (!sendAt || !subject_template || !body_template || !Array.isArray(csv_rows) || csv_rows.length === 0) {
       return res.status(400).json({ error: 'sendAt, subject_template, body_template, and non-empty csv_rows required' });
     }
@@ -87,12 +91,13 @@ router.post('/schedule', async (req, res) => {
       return res.status(400).json({ error: 'Each csv row must have an "email" field' });
     }
 
+    const sessionUserId = requireSessionUserId(req, res);
+    if (!sessionUserId) return;
+
     const db = getDb();
-    const user = userId
-      ? await db.get('SELECT id FROM users WHERE id = ?', userId)
-      : await db.get('SELECT id FROM users LIMIT 1');
+    const user = await db.get('SELECT id FROM users WHERE id = ?', sessionUserId);
     if (!user) {
-      return res.status(400).json({ error: 'No linked Gmail account. Complete OAuth in the extension first.' });
+      return res.status(400).json({ error: 'No linked Gmail account. Sign in with Google first.' });
     }
 
     const id = uuidv4();
@@ -148,10 +153,13 @@ router.post('/upload', async (req, res) => {
  */
 router.get('/scheduled', async (req, res) => {
   try {
+    const userId = requireSessionUserId(req, res);
+    if (!userId) return;
     const db = getDb();
     const jobs = await db.all(
       `SELECT id, send_at, timezone, subject_template, status, created_at, csv_rows
-       FROM scheduled_jobs WHERE status = 'pending' ORDER BY send_at ASC LIMIT 100`
+       FROM scheduled_jobs WHERE status = 'pending' AND user_id = ? ORDER BY send_at ASC LIMIT 100`,
+      userId
     );
     const withCounts = jobs.map((job) => {
       const rows = typeof job.csv_rows === 'string' ? JSON.parse(job.csv_rows) : (job.csv_rows || []);
@@ -177,10 +185,12 @@ router.get('/scheduled', async (req, res) => {
  */
 router.delete('/scheduled/:id', async (req, res) => {
   try {
+    const userId = requireSessionUserId(req, res);
+    if (!userId) return;
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Campaign id required' });
     const db = getDb();
-    const job = await db.get('SELECT id, status FROM scheduled_jobs WHERE id = ?', id);
+    const job = await db.get('SELECT id, status FROM scheduled_jobs WHERE id = ? AND user_id = ?', id, userId);
     if (!job) return res.status(404).json({ error: 'Campaign not found' });
     if (job.status !== 'pending') return res.status(400).json({ error: 'Only pending campaigns can be cancelled' });
     await db.run("UPDATE scheduled_jobs SET status = 'cancelled' WHERE id = ?", id);
@@ -196,7 +206,9 @@ router.delete('/scheduled/:id', async (req, res) => {
  */
 router.post('/send-now', async (req, res) => {
   try {
-    const { timezone, subject_template, body_template, csv_rows, attachment_storage_key, userId } = req.body || {};
+    const sessionUserId = requireSessionUserId(req, res);
+    if (!sessionUserId) return;
+    const { timezone, subject_template, body_template, csv_rows, attachment_storage_key } = req.body || {};
     if (!subject_template || !body_template || !Array.isArray(csv_rows) || csv_rows.length === 0) {
       return res.status(400).json({ error: 'subject_template, body_template, and non-empty csv_rows required' });
     }
@@ -206,11 +218,9 @@ router.post('/send-now', async (req, res) => {
     }
 
     const db = getDb();
-    const user = userId
-      ? await db.get('SELECT id FROM users WHERE id = ?', userId)
-      : await db.get('SELECT id FROM users LIMIT 1');
+    const user = await db.get('SELECT id FROM users WHERE id = ?', sessionUserId);
     if (!user) {
-      return res.status(400).json({ error: 'No linked Gmail account. Complete OAuth in the extension first.' });
+      return res.status(400).json({ error: 'No linked Gmail account. Sign in with Google first.' });
     }
 
     const sendAt = new Date().toISOString();
@@ -242,10 +252,13 @@ router.post('/send-now', async (req, res) => {
  */
 router.get('/sent', async (req, res) => {
   try {
+    const userId = requireSessionUserId(req, res);
+    if (!userId) return;
     const db = getDb();
     const jobs = await db.all(
       `SELECT id, send_at, timezone, subject_template, status, created_at
-       FROM scheduled_jobs WHERE status IN ('sent', 'failed') ORDER BY created_at DESC LIMIT 100`
+       FROM scheduled_jobs WHERE user_id = ? AND status IN ('sent', 'failed') ORDER BY created_at DESC LIMIT 100`,
+      userId
     );
 
     const withCounts = await Promise.all(

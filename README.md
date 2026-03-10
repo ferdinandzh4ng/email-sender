@@ -34,7 +34,8 @@ Web app (or Chrome extension) + backend to send templated emails from a CSV, wit
    - `OAUTH_REDIRECT_URI`: must match the redirect URI in Google (e.g. `http://localhost:3000/oauth/callback`).
    - Optional: `OAUTH_SUCCESS_REDIRECT` — only needed if you do not pass `success_redirect` from the extension (extension passes it by default).
    - Optional: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for attachment storage (recommended for production).
-   - For **web app** deployment: set `ALLOWED_ORIGINS` to your Vercel app URL (e.g. `https://your-app.vercel.app`) or comma-separated list. Alternatively use `WEB_APP_ORIGIN` or keep `EXTENSION_ORIGIN` for the extension only.
+   - Optional: `SESSION_SECRET` — used for per-user sessions (recommended: `openssl rand -hex 32`). If unset, falls back to `ENCRYPTION_KEY`.
+   - For **web app** deployment: set `ALLOWED_ORIGINS` to your web app URL (e.g. `https://your-app.vercel.app`). Use a **specific origin**, not `*`, so session cookies work and each user gets their own linked Gmail on their device.
 
 4. **Run**
    ```bash

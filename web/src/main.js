@@ -1,6 +1,17 @@
 import { api } from './api.js';
 
+const SESSION_SIGNED_IN_KEY = 'email-sender-signed-in';
 let linkedUser = { linked: false, email: null };
+
+function isSignedInThisSession() {
+  return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SESSION_SIGNED_IN_KEY) === '1';
+}
+
+function setSignedInThisSession(signedIn) {
+  if (typeof sessionStorage === 'undefined') return;
+  if (signedIn) sessionStorage.setItem(SESSION_SIGNED_IN_KEY, '1');
+  else sessionStorage.removeItem(SESSION_SIGNED_IN_KEY);
+}
 
 function escapeAttr(s) {
   if (s == null) return '';
@@ -19,15 +30,19 @@ function updateLinkedUI() {
   const linkSection = document.getElementById('linkGmailSection');
   const linkedSection = document.getElementById('linkedAccountSection');
   const linkedEmailEl = document.getElementById('linkedAccountEmail');
-  if (linkedUser.linked && linkedUser.email) {
+  const signOutBtn = document.getElementById('signOutGmail');
+  const showAsLinked = linkedUser.linked && linkedUser.email && isSignedInThisSession();
+  if (showAsLinked) {
     if (headerEl) headerEl.innerHTML = `<span class="avatar">${(linkedUser.email[0] || '?').toUpperCase()}</span><span><span class="linked-badge">Linked</span><span class="email" title="${escapeAttr(linkedUser.email)}">${escapeHtml(linkedUser.email)}</span></span>`;
     if (linkSection) linkSection.style.display = 'none';
     if (linkedSection) linkedSection.style.display = 'block';
     if (linkedEmailEl) linkedEmailEl.textContent = linkedUser.email;
+    if (signOutBtn) signOutBtn.style.display = 'inline-block';
   } else {
     if (headerEl) headerEl.innerHTML = '<span class="not-linked">Not signed in — sign in with Google in New campaign</span>';
     if (linkSection) linkSection.style.display = 'block';
     if (linkedSection) linkedSection.style.display = 'none';
+    if (signOutBtn) signOutBtn.style.display = 'none';
   }
 }
 
@@ -229,6 +244,15 @@ document.getElementById('relinkGmail').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('signOutGmail').addEventListener('click', async () => {
+  try {
+    await api.logout();
+  } catch (_) {}
+  setSignedInThisSession(false);
+  linkedUser = { linked: false, email: null };
+  updateLinkedUI();
+});
+
 document.getElementById('sendTestBtn').addEventListener('click', async () => {
   const to = document.getElementById('testEmailTo').value.trim();
   const statusEl = document.getElementById('testEmailStatus');
@@ -251,6 +275,7 @@ document.getElementById('sendTestBtn').addEventListener('click', async () => {
 });
 
 if (typeof window !== 'undefined' && window.location.search.includes('linked=1')) {
+  setSignedInThisSession(true);
   loadLinkedUser();
   window.history.replaceState({}, '', window.location.pathname || '/');
 }
@@ -495,6 +520,7 @@ document.getElementById('refreshDashboard').addEventListener('click', loadDashbo
 loadLinkedUser().then(() => {
   if (sessionStorage.getItem('email-sender-just-linked')) {
     sessionStorage.removeItem('email-sender-just-linked');
+    setSignedInThisSession(true);
     loadLinkedUser();
   }
 });

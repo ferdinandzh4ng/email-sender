@@ -3,18 +3,24 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db.js';
 import { getAuthUrl, getRedirectUri, exchangeCodeForTokens } from '../gmail.js';
 import { encrypt } from '../crypto.js';
+import { getSessionUserId } from '../session.js';
 
 const router = Router();
 
 /**
  * GET /auth/me
- * Returns the currently linked Gmail user (first user with a refresh token). Used by extension to show "Linked as email" and persist linked state.
+ * Returns the currently signed-in user's linked Gmail (from session). Each device has its own session.
  */
 router.get('/auth/me', async (req, res) => {
   try {
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      return res.json({ linked: false, email: null, id: null });
+    }
     const db = getDb();
     const user = await db.get(
-      'SELECT id, email FROM users WHERE encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ? LIMIT 1',
+      'SELECT id, email FROM users WHERE id = ? AND encrypted_refresh_token IS NOT NULL AND encrypted_refresh_token != ?',
+      userId,
       ''
     );
     if (!user) {
@@ -91,13 +97,14 @@ router.get('/oauth/callback', async (req, res) => {
     const encrypted = encrypt(refreshToken);
     await db.run(
       `INSERT INTO users (id, email, encrypted_refresh_token) VALUES (?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET encrypted_refresh_token = EXCLUDED.encrypted_refresh_token`,
+       ON CONFLICT(id) DO UPDATE SET encrypted_refresh_token = EXCLUDED.encrypted_refresh_token, updated_at = NOW()`,
       email,
       email,
       encrypted
     );
 
-    console.log('[OAuth callback] success, redirecting to', redirectBase);
+    req.session.userId = email;
+    console.log('[OAuth callback] success, session set for', email, 'redirecting to', redirectBase);
     return res.redirect(redirectBase + '?linked=1');
   } catch (err) {
     console.error('[OAuth callback] full error:', err.message, err.response?.data || '');
@@ -113,6 +120,17 @@ router.get('/oauth/callback', async (req, res) => {
     }
     return redirectError(msg);
   }
+});
+
+/**
+ * POST /auth/logout
+ * Destroys the current session so this device is no longer signed in.
+ */
+router.post('/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true });
+  });
 });
 
 export default router;
