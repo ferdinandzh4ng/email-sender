@@ -7,6 +7,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         linked: 'linked.html',
+        privacy: 'privacy.html',
       },
     },
   },
