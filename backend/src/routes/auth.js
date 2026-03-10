@@ -109,8 +109,14 @@ router.get('/oauth/callback', async (req, res) => {
     );
 
     req.session.userId = email;
-    console.log('[OAuth callback] success, session set for', email, 'redirecting to', redirectBase);
-    return res.redirect(redirectBase + '?linked=1');
+    req.session.save((err) => {
+      if (err) {
+        console.error('[OAuth callback] session save error:', err);
+        return redirectError('Session save failed. Try again.');
+      }
+      console.log('[OAuth callback] success, session set for', email, 'redirecting to', redirectBase);
+      res.redirect(redirectBase + '?linked=1');
+    });
   } catch (err) {
     console.error('[OAuth callback] full error:', err.message, err.response?.data || '');
     const msg = err.message || String(err);

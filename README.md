@@ -35,7 +35,7 @@ Web app (or Chrome extension) + backend to send templated emails from a CSV, wit
    - **`OAUTH_SUCCESS_REDIRECT`** — Set this to your **web app’s linked page** so sign-in always redirects to the app (e.g. `https://your-app.vercel.app/linked.html`). Required if you use the web app; if unset or if an extension URL is used, redirect falls back to this or localhost.
    - Optional: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for attachment storage (recommended for production).
    - Optional: `SESSION_SECRET` — used for per-user sessions (recommended: `openssl rand -hex 32`). If unset, falls back to `ENCRYPTION_KEY`. Sessions are stored in **Supabase** (same Postgres as the rest of the app via `connect-pg-simple`).
-   - For **web app** deployment: set `ALLOWED_ORIGINS` to your web app URL (e.g. `https://your-app.vercel.app`). Use a **specific origin**, not `*`, so session cookies work and each user gets their own linked Gmail on their device. On Render (or any host where the frontend is on a different domain), set **NODE_ENV=production** so the session cookie uses `SameSite=None; Secure` and is sent on cross-origin requests.
+   - For **web app** deployment: set `ALLOWED_ORIGINS` to your web app URL (e.g. `https://your-app.vercel.app`). Use a **specific origin**, not `*`, so session cookies work. When `ALLOWED_ORIGINS` is set to an `https://` URL, the backend automatically uses cross-origin cookies (`SameSite=None; Secure`) so the session is sent from your Vercel app to the backend. Session cookie lasts 1 year so users stay signed in.
    - **Per-user templates:** If you created the DB before templates were user-scoped, run in Supabase: `ALTER TABLE templates ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id);`
 
 4. **Run**

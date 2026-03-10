@@ -31,6 +31,7 @@ async function start() {
   const normalize = (o) => (o || '').trim().replace(/\/+$/, '');
   const origins = raw.map(normalize).filter(Boolean);
   const allowCredentials = origins.length > 0 && origins[0] !== '*';
+  const useCrossOriginCookie = allowCredentials && origins[0] && (origins[0].startsWith('https://') || origins[0].startsWith('http://'));
   app.use(cors({
     origin: origins.length > 1
       ? (origin, cb) => {
@@ -48,7 +49,7 @@ async function start() {
   }));
 
   const sessionSecret = process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY || 'dev-secret-change-in-production';
-  const isProduction = process.env.NODE_ENV === 'production';
+  const oneYearMs = 365 * 24 * 60 * 60 * 1000;
   app.use(session({
     store: sessionStore,
     secret: sessionSecret,
@@ -57,9 +58,9 @@ async function start() {
     name: 'email-sender.sid',
     cookie: {
       httpOnly: true,
-      sameSite: isProduction ? 'none' : 'lax',
-      secure: isProduction,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      sameSite: useCrossOriginCookie ? 'none' : 'lax',
+      secure: useCrossOriginCookie || process.env.NODE_ENV === 'production',
+      maxAge: oneYearMs,
     },
   }));
 
@@ -75,6 +76,7 @@ async function start() {
   const port = Number(process.env.PORT) || 3000;
   app.listen(port, () => {
     console.log(`Server listening on http://localhost:${port}`);
+    if (useCrossOriginCookie) console.log('[Session] Cross-origin cookie enabled (SameSite=None; Secure; 1 year) for ALLOWED_ORIGINS');
     startScheduler();
   });
 }
