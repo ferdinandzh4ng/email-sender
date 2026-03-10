@@ -525,12 +525,36 @@ async function loadDashboard() {
 
 document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);
 
+function applyPanelFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const panel = params.get('panel');
+  if (panel && ['dashboard', 'templates', 'campaign'].includes(panel)) {
+    document.querySelectorAll('.side-nav [data-panel]').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    const btn = document.querySelector(`.side-nav [data-panel="${panel}"]`);
+    if (btn) {
+      btn.classList.add('active');
+      document.getElementById('panel-' + panel)?.classList.add('active');
+      document.getElementById('headerTitle').textContent = titles[panel] || panel;
+      if (panel === 'dashboard') loadDashboard();
+      if (panel === 'templates') loadTemplatesList();
+      if (panel === 'campaign') {
+        resetCampaignPanel();
+        loadLinkedUser();
+        loadCampaignTemplatePicker();
+      }
+    }
+    window.history.replaceState({}, '', window.location.pathname || '/');
+  }
+}
+
 loadLinkedUser().then(() => {
   if (sessionStorage.getItem('email-sender-just-linked')) {
     sessionStorage.removeItem('email-sender-just-linked');
     setSignedInThisSession(true);
     loadLinkedUser();
   }
+  applyPanelFromUrl();
 });
 loadDashboard();
 loadCampaignTemplatePicker();

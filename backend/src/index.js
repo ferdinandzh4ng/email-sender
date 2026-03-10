@@ -48,6 +48,7 @@ async function start() {
   }));
 
   const sessionSecret = process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY || 'dev-secret-change-in-production';
+  const isProduction = process.env.NODE_ENV === 'production';
   app.use(session({
     store: sessionStore,
     secret: sessionSecret,
@@ -56,8 +57,8 @@ async function start() {
     name: 'email-sender.sid',
     cookie: {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   }));

@@ -61,3 +61,4 @@ ALTER TABLE templates DROP CONSTRAINT IF EXISTS single_template;
 CREATE SEQUENCE IF NOT EXISTS templates_id_seq;
 SELECT setval('templates_id_seq', (SELECT COALESCE(MAX(id), 1) FROM templates));
 ALTER TABLE templates ALTER COLUMN id SET DEFAULT nextval('templates_id_seq');
+-- Per-user templates (run for existing DBs): ALTER TABLE templates ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id);

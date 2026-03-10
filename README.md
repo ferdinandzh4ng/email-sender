@@ -35,7 +35,8 @@ Web app (or Chrome extension) + backend to send templated emails from a CSV, wit
    - Optional: `OAUTH_SUCCESS_REDIRECT` — only needed if you do not pass `success_redirect` from the extension (extension passes it by default).
    - Optional: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for attachment storage (recommended for production).
    - Optional: `SESSION_SECRET` — used for per-user sessions (recommended: `openssl rand -hex 32`). If unset, falls back to `ENCRYPTION_KEY`.
-   - For **web app** deployment: set `ALLOWED_ORIGINS` to your web app URL (e.g. `https://your-app.vercel.app`). Use a **specific origin**, not `*`, so session cookies work and each user gets their own linked Gmail on their device.
+   - For **web app** deployment: set `ALLOWED_ORIGINS` to your web app URL (e.g. `https://your-app.vercel.app`). Use a **specific origin**, not `*`, so session cookies work and each user gets their own linked Gmail on their device. On Render (or any host where the frontend is on a different domain), set **NODE_ENV=production** so the session cookie uses `SameSite=None; Secure` and is sent on cross-origin requests.
+   - **Per-user templates:** If you created the DB before templates were user-scoped, run in Supabase: `ALTER TABLE templates ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id);`
 
 4. **Run**
    ```bash
