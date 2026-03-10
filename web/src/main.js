@@ -31,6 +31,7 @@ function updateLinkedUI() {
   const linkedSection = document.getElementById('linkedAccountSection');
   const linkedEmailEl = document.getElementById('linkedAccountEmail');
   const signOutBtn = document.getElementById('signOutGmail');
+  const dashboardSignInSection = document.getElementById('dashboardSignInSection');
   const showAsLinked = linkedUser.linked && linkedUser.email && isSignedInThisSession();
   if (showAsLinked) {
     if (headerEl) headerEl.innerHTML = `<span class="avatar">${(linkedUser.email[0] || '?').toUpperCase()}</span><span><span class="linked-badge">Linked</span><span class="email" title="${escapeAttr(linkedUser.email)}">${escapeHtml(linkedUser.email)}</span></span>`;
@@ -38,11 +39,13 @@ function updateLinkedUI() {
     if (linkedSection) linkedSection.style.display = 'block';
     if (linkedEmailEl) linkedEmailEl.textContent = linkedUser.email;
     if (signOutBtn) signOutBtn.style.display = 'inline-block';
+    if (dashboardSignInSection) dashboardSignInSection.style.display = 'none';
   } else {
     if (headerEl) headerEl.innerHTML = '<span class="not-linked">Not signed in — sign in with Google in New campaign</span>';
     if (linkSection) linkSection.style.display = 'block';
     if (linkedSection) linkedSection.style.display = 'none';
     if (signOutBtn) signOutBtn.style.display = 'none';
+    if (dashboardSignInSection) dashboardSignInSection.style.display = 'block';
   }
 }
 
@@ -57,8 +60,10 @@ async function loadLinkedUser() {
     if (headerEl) headerEl.innerHTML = '<span class="not-linked">Backend unreachable — set VITE_BACKEND_URL?</span>';
     const linkSection = document.getElementById('linkGmailSection');
     const linkedSection = document.getElementById('linkedAccountSection');
+    const dashboardSignInSection = document.getElementById('dashboardSignInSection');
     if (linkSection) linkSection.style.display = 'block';
     if (linkedSection) linkedSection.style.display = 'none';
+    if (dashboardSignInSection) dashboardSignInSection.style.display = 'block';
   }
 }
 
@@ -224,7 +229,7 @@ async function loadCampaignTemplatePicker() {
   }
 }
 
-document.getElementById('linkGmail').addEventListener('click', async () => {
+async function goToGoogleSignIn() {
   const successRedirect = window.location.origin + '/linked.html';
   try {
     const url = await api.getAuthUrl(successRedirect);
@@ -232,7 +237,10 @@ document.getElementById('linkGmail').addEventListener('click', async () => {
   } catch (err) {
     alert('Failed to get auth URL. Is the backend running? ' + err.message);
   }
-});
+}
+
+document.getElementById('linkGmail').addEventListener('click', goToGoogleSignIn);
+document.getElementById('dashboardSignInBtn').addEventListener('click', goToGoogleSignIn);
 
 document.getElementById('relinkGmail').addEventListener('click', async () => {
   const successRedirect = window.location.origin + '/linked.html';
