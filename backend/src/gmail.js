@@ -22,16 +22,17 @@ export function getRedirectUri() {
 }
 
 /**
- * Get auth URL for extension to open in launchWebAuthFlow.
+ * Get auth URL. Pass state so Google echoes it back in the callback (single state param).
  */
-export function getAuthUrl() {
+export function getAuthUrl(state) {
   const oauth2 = createOAuth2Client();
-  return oauth2.generateAuthUrl({
+  const opts = {
     access_type: 'offline',
     prompt: 'consent',
     scope: SCOPES,
-    state: undefined, // caller adds state
-  });
+  };
+  if (state) opts.state = state;
+  return oauth2.generateAuthUrl(opts);
 }
 
 /**

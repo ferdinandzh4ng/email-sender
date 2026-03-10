@@ -53,9 +53,8 @@ router.get('/auth/url', async (req, res) => {
   } else {
     await db.run('INSERT INTO oauth_states (state) VALUES (?)', state);
   }
-  const baseUrl = getAuthUrl();
-  const url = `${baseUrl}&state=${encodeURIComponent(state)}`;
-  console.log('[OAuth] auth URL generated, redirect_uri sent to Google:', getRedirectUri());
+  const url = getAuthUrl(state);
+  console.log('[OAuth] auth URL generated, redirect_uri:', getRedirectUri(), 'success_redirect:', successRedirect || '(env/default)');
   res.json({ url });
 });
 
@@ -65,14 +64,16 @@ router.get('/auth/url', async (req, res) => {
  * Exchange code for tokens, store user + encrypted refresh token, redirect to extension.
  */
 router.get('/oauth/callback', async (req, res) => {
-  const { code, state } = req.query;
-  console.log('[OAuth callback]', { hasCode: !!code, hasState: !!state, queryKeys: Object.keys(req.query || {}), url: req.url?.slice(0, 120) });
+  const code = req.query.code;
+  const state = req.query.state;
+  console.log('[OAuth callback]', { hasCode: !!code, hasState: !!state, queryKeys: Object.keys(req.query || {}) });
   const db = getDb();
   const row = state ? await db.get('SELECT success_redirect FROM oauth_states WHERE state = ?', state) : null;
   let redirectBase = (row && row.success_redirect) || process.env.OAUTH_SUCCESS_REDIRECT || 'http://localhost:3000/success.html';
-  if (redirectBase.includes('your_extension_id') || (redirectBase && redirectBase.startsWith('chrome-extension://'))) {
+  if (!redirectBase || redirectBase.includes('your_extension_id') || redirectBase.startsWith('chrome-extension://')) {
     redirectBase = process.env.OAUTH_SUCCESS_REDIRECT || 'http://localhost:3000/success.html';
   }
+  if (!state) console.log('[OAuth callback] no state from Google, using OAUTH_SUCCESS_REDIRECT:', redirectBase);
 
   const redirectError = (msg) => {
     console.error('[OAuth callback]', msg);
