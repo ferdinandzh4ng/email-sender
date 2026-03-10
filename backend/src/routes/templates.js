@@ -10,7 +10,7 @@ const router = Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const db = getDb();
     try {
@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
  */
 router.delete('/:id', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid template id' });
@@ -59,7 +59,7 @@ router.delete('/:id', async (req, res) => {
  */
 router.get('/:id', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid template id' });
@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const { id, name, subject, body } = req.body || {};
     const db = getDb();

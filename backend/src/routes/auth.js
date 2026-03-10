@@ -17,7 +17,7 @@ function escapeHtmlAttr(s) {
  */
 router.get('/auth/me', async (req, res) => {
   try {
-    const userId = getSessionUserId(req);
+    const userId = await getSessionUserId(req);
     if (!userId) {
       return res.json({ linked: false, email: null, id: null });
     }
@@ -118,7 +118,8 @@ router.get('/oauth/callback', async (req, res) => {
     try {
       claimToken = uuidv4();
       await db.run('INSERT INTO session_claims (token, user_id) VALUES (?, ?)', claimToken, email);
-    } catch (_) {
+    } catch (e) {
+      console.warn('[OAuth callback] session_claims insert failed:', e.message);
       claimToken = null;
     }
     req.session.save((err) => {
@@ -151,26 +152,35 @@ router.get('/oauth/callback', async (req, res) => {
 
 /**
  * GET /auth/claim?claim=TOKEN
- * One-time session claim: validate token (from post-OAuth redirect), set session, delete token.
- * Used when the session cookie does not stick on the OAuth callback redirect; the app calls this
- * with the claim token so the session is set in response to a request from the app origin.
+ * One-time session claim: validate token (from post-OAuth redirect), set session, issue long-lived auth token, delete claim.
+ * Returns { ok: true, token } so the frontend can store the token and send it in Authorization header when cookies don't stick.
  */
 router.get('/auth/claim', async (req, res) => {
-  const token = req.query.claim;
-  if (!token || typeof token !== 'string') {
+  const claimToken = req.query.claim;
+  if (!claimToken || typeof claimToken !== 'string') {
     return res.status(400).json({ error: 'Missing claim token' });
   }
   try {
     const db = getDb();
-    const row = await db.get('SELECT user_id FROM session_claims WHERE token = ?', token.trim());
+    const row = await db.get('SELECT user_id FROM session_claims WHERE token = ?', claimToken.trim());
     if (!row) {
       return res.status(400).json({ error: 'Invalid or expired claim token' });
     }
-    await db.run('DELETE FROM session_claims WHERE token = ?', token.trim());
+    await db.run('DELETE FROM session_claims WHERE token = ?', claimToken.trim());
     req.session.userId = row.user_id;
+    const oneYearFromNow = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const authToken = uuidv4();
+    try {
+      await db.run('INSERT INTO auth_tokens (token, user_id, expires_at) VALUES (?, ?, ?)', authToken, row.user_id, oneYearFromNow.toISOString());
+    } catch (e) {
+      if (e.message && e.message.includes('auth_tokens')) {
+        return res.status(500).json({ error: 'Run in Supabase: CREATE TABLE IF NOT EXISTS auth_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL);' });
+      }
+      throw e;
+    }
     req.session.save((err) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ ok: true });
+      res.json({ ok: true, token: authToken });
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

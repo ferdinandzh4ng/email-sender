@@ -553,7 +553,8 @@ function applyPanelFromUrl() {
   const claim = params.get('claim');
   if (claim) {
     try {
-      await api.fetchBackend('/auth/claim?claim=' + encodeURIComponent(claim));
+      const data = await api.fetchBackend('/auth/claim?claim=' + encodeURIComponent(claim));
+      if (data.token) api.setAuthToken(data.token);
       setSignedInThisSession(true);
       const u = new URL(window.location.href);
       u.searchParams.delete('claim');

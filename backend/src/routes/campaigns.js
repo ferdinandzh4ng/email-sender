@@ -44,7 +44,7 @@ router.post('/send-test', async (req, res) => {
  */
 router.post('/send-test-linked', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const { to } = req.body || {};
     if (!to || !String(to).trim()) {
@@ -91,7 +91,7 @@ router.post('/schedule', async (req, res) => {
       return res.status(400).json({ error: 'Each csv row must have an "email" field' });
     }
 
-    const sessionUserId = requireSessionUserId(req, res);
+    const sessionUserId = await requireSessionUserId(req, res);
     if (!sessionUserId) return;
 
     const db = getDb();
@@ -153,7 +153,7 @@ router.post('/upload', async (req, res) => {
  */
 router.get('/scheduled', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const db = getDb();
     const jobs = await db.all(
@@ -185,7 +185,7 @@ router.get('/scheduled', async (req, res) => {
  */
 router.delete('/scheduled/:id', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Campaign id required' });
@@ -206,7 +206,7 @@ router.delete('/scheduled/:id', async (req, res) => {
  */
 router.post('/send-now', async (req, res) => {
   try {
-    const sessionUserId = requireSessionUserId(req, res);
+    const sessionUserId = await requireSessionUserId(req, res);
     if (!sessionUserId) return;
     const { timezone, subject_template, body_template, csv_rows, attachment_storage_key } = req.body || {};
     if (!subject_template || !body_template || !Array.isArray(csv_rows) || csv_rows.length === 0) {
@@ -252,7 +252,7 @@ router.post('/send-now', async (req, res) => {
  */
 router.get('/sent', async (req, res) => {
   try {
-    const userId = requireSessionUserId(req, res);
+    const userId = await requireSessionUserId(req, res);
     if (!userId) return;
     const db = getDb();
     const jobs = await db.all(

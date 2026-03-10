@@ -37,7 +37,7 @@ Web app (or Chrome extension) + backend to send templated emails from a CSV, wit
    - Optional: `SESSION_SECRET` — used for per-user sessions (recommended: `openssl rand -hex 32`). If unset, falls back to `ENCRYPTION_KEY`. Sessions are stored in **Supabase** (same Postgres as the rest of the app via `connect-pg-simple`).
    - For **web app** deployment: set `ALLOWED_ORIGINS` to your web app URL (e.g. `https://your-app.vercel.app`). Use a **specific origin**, not `*`, so session cookies work. When `ALLOWED_ORIGINS` is set to an `https://` URL, the backend automatically uses cross-origin cookies (`SameSite=None; Secure`) so the session is sent from your Vercel app to the backend. Session cookie lasts 1 year so users stay signed in.
    - **Per-user templates:** If you created the DB before templates were user-scoped, run in Supabase: `ALTER TABLE templates ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id);`
-   - **Session claim (sign-in fallback):** If the session cookie does not stick after OAuth, the app can “claim” the session with a one-time token. Run in Supabase: `CREATE TABLE IF NOT EXISTS session_claims (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`
+   - **Session claim (sign-in fallback):** If the session cookie does not stick after OAuth, the app can “claim” the session with a one-time token. Run in Supabase: `CREATE TABLE IF NOT EXISTS session_claims (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());` and `CREATE TABLE IF NOT EXISTS auth_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL);`
 
 4. **Run**
    ```bash

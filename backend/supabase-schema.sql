@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS session_claims (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Long-lived auth tokens (fallback when session cookie is not stored by the browser)
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
   id UUID PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
