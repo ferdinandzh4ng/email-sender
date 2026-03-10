@@ -114,16 +114,23 @@ router.get('/oauth/callback', async (req, res) => {
     );
 
     req.session.userId = email;
+    let claimToken = null;
+    try {
+      claimToken = uuidv4();
+      await db.run('INSERT INTO session_claims (token, user_id) VALUES (?, ?)', claimToken, email);
+    } catch (_) {
+      claimToken = null;
+    }
     req.session.save((err) => {
       if (err) {
         console.error('[OAuth callback] session save error:', err);
         return redirectError('Session save failed. Try again.');
       }
-      const targetUrl = redirectBase + '?linked=1';
-      console.log('[OAuth callback] success, session set for', email, 'sending 200 redirect to', targetUrl);
+      const targetUrl = redirectBase + (claimToken ? '?linked=1&claim=' + encodeURIComponent(claimToken) : '?linked=1');
+      console.log('[OAuth callback] success, session set for', email, claimToken ? '(with claim token)' : '', 'redirecting to app');
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).end(
-        `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${escapeHtmlAttr(targetUrl)}"></head><body><p>Sign-in successful. <a href="${escapeHtmlAttr(targetUrl)}">Continue to app</a>.</p><script>location.href=${JSON.stringify(targetUrl)};</script></body></html>`
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign-in successful</title></head><body><p>Sign-in successful. Redirecting…</p><p><a href="${escapeHtmlAttr(targetUrl)}">Continue to app</a> if you are not redirected.</p><script>setTimeout(function(){ location.href=${JSON.stringify(targetUrl)}; }, 800);</script></body></html>`
       );
     });
   } catch (err) {
@@ -139,6 +146,34 @@ router.get('/oauth/callback', async (req, res) => {
       return redirectError('Redirect URI mismatch. In Google Console, add exactly: ' + (process.env.OAUTH_REDIRECT_URI || 'http://localhost:3000/oauth/callback'));
     }
     return redirectError(msg);
+  }
+});
+
+/**
+ * GET /auth/claim?claim=TOKEN
+ * One-time session claim: validate token (from post-OAuth redirect), set session, delete token.
+ * Used when the session cookie does not stick on the OAuth callback redirect; the app calls this
+ * with the claim token so the session is set in response to a request from the app origin.
+ */
+router.get('/auth/claim', async (req, res) => {
+  const token = req.query.claim;
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Missing claim token' });
+  }
+  try {
+    const db = getDb();
+    const row = await db.get('SELECT user_id FROM session_claims WHERE token = ?', token.trim());
+    if (!row) {
+      return res.status(400).json({ error: 'Invalid or expired claim token' });
+    }
+    await db.run('DELETE FROM session_claims WHERE token = ?', token.trim());
+    req.session.userId = row.user_id;
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

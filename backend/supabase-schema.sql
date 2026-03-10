@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS oauth_states (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- One-time tokens to claim a session after OAuth (when cookie may not stick on redirect)
+CREATE TABLE IF NOT EXISTS session_claims (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
   id UUID PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),

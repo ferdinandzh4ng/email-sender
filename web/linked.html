@@ -16,10 +16,14 @@
     <p><a href="/">Go to app</a></p>
   </div>
   <script>
-    if (window.location.search.includes('linked=1')) {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('linked') === '1') {
       sessionStorage.setItem('email-sender-just-linked', '1');
       sessionStorage.setItem('email-sender-signed-in', '1');
-      setTimeout(function () { window.location.href = '/?panel=dashboard'; }, 1200);
+      var claim = params.get('claim');
+      var target = '/?panel=dashboard&linked=1';
+      if (claim) target += '&claim=' + encodeURIComponent(claim);
+      setTimeout(function () { window.location.href = target; }, 400);
     }
   </script>
 </body>

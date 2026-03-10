@@ -282,7 +282,7 @@ document.getElementById('sendTestBtn').addEventListener('click', async () => {
   }
 });
 
-if (typeof window !== 'undefined' && window.location.search.includes('linked=1')) {
+if (typeof window !== 'undefined' && window.location.search.includes('linked=1') && !window.location.search.includes('claim=')) {
   setSignedInThisSession(true);
   loadLinkedUser();
   window.history.replaceState({}, '', window.location.pathname || '/');
@@ -548,13 +548,26 @@ function applyPanelFromUrl() {
   }
 }
 
-loadLinkedUser().then(() => {
+(async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const claim = params.get('claim');
+  if (claim) {
+    try {
+      await api.fetchBackend('/auth/claim?claim=' + encodeURIComponent(claim));
+      setSignedInThisSession(true);
+      const u = new URL(window.location.href);
+      u.searchParams.delete('claim');
+      const search = u.search ? u.search : '';
+      window.history.replaceState({}, '', u.pathname + search || '/');
+    } catch (_) {}
+  }
+  await loadLinkedUser();
   if (sessionStorage.getItem('email-sender-just-linked')) {
     sessionStorage.removeItem('email-sender-just-linked');
     setSignedInThisSession(true);
-    loadLinkedUser();
+    await loadLinkedUser();
   }
   applyPanelFromUrl();
-});
-loadDashboard();
-loadCampaignTemplatePicker();
+  loadDashboard();
+  loadCampaignTemplatePicker();
+})();
