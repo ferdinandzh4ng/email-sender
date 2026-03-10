@@ -7,6 +7,10 @@ import { getSessionUserId } from '../session.js';
 
 const router = Router();
 
+function escapeHtmlAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
 /**
  * GET /auth/me
  * Returns the currently signed-in user's linked Gmail (from session). Each device has its own session.
@@ -115,8 +119,12 @@ router.get('/oauth/callback', async (req, res) => {
         console.error('[OAuth callback] session save error:', err);
         return redirectError('Session save failed. Try again.');
       }
-      console.log('[OAuth callback] success, session set for', email, 'redirecting to', redirectBase);
-      res.redirect(redirectBase + '?linked=1');
+      const targetUrl = redirectBase + '?linked=1';
+      console.log('[OAuth callback] success, session set for', email, 'sending 200 redirect to', targetUrl);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.status(200).end(
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${escapeHtmlAttr(targetUrl)}"></head><body><p>Sign-in successful. <a href="${escapeHtmlAttr(targetUrl)}">Continue to app</a>.</p><script>location.href=${JSON.stringify(targetUrl)};</script></body></html>`
+      );
     });
   } catch (err) {
     console.error('[OAuth callback] full error:', err.message, err.response?.data || '');
