@@ -34,12 +34,15 @@ router.get('/auth/me', async (req, res) => {
 
 /**
  * GET /auth/url
- * Query: success_redirect (optional) - URL to redirect after OAuth (e.g. chrome-extension://id/success.html)
- * Returns OAuth URL for extension to open in a new tab.
+ * Query: success_redirect (optional) - URL to redirect after OAuth. Should be your web app's linked page (e.g. https://your-app.vercel.app/linked.html).
+ * If success_redirect is an extension URL (chrome-extension://), it is ignored and OAUTH_SUCCESS_REDIRECT is used instead so sign-in always lands on the web app.
  */
 router.get('/auth/url', async (req, res) => {
   const state = uuidv4();
-  const successRedirect = req.query.success_redirect || process.env.OAUTH_SUCCESS_REDIRECT;
+  let successRedirect = req.query.success_redirect || process.env.OAUTH_SUCCESS_REDIRECT;
+  if (successRedirect && String(successRedirect).startsWith('chrome-extension://')) {
+    successRedirect = process.env.OAUTH_SUCCESS_REDIRECT || null;
+  }
   const db = getDb();
   if (successRedirect) {
     await db.run(
@@ -67,7 +70,9 @@ router.get('/oauth/callback', async (req, res) => {
   const db = getDb();
   const row = state ? await db.get('SELECT success_redirect FROM oauth_states WHERE state = ?', state) : null;
   let redirectBase = (row && row.success_redirect) || process.env.OAUTH_SUCCESS_REDIRECT || 'http://localhost:3000/success.html';
-  if (redirectBase.includes('your_extension_id')) redirectBase = 'http://localhost:3000/success.html';
+  if (redirectBase.includes('your_extension_id') || (redirectBase && redirectBase.startsWith('chrome-extension://'))) {
+    redirectBase = process.env.OAUTH_SUCCESS_REDIRECT || 'http://localhost:3000/success.html';
+  }
 
   const redirectError = (msg) => {
     console.error('[OAuth callback]', msg);
